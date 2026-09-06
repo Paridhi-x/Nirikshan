@@ -1,0 +1,602 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+.gov-page {
+  height: 100vh;
+  overflow: hidden;
+
+  background: #f7f5ef;
+  color: #1c2b24;
+  font-family: Arial, Helvetica, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* ───────────── Header ───────────── */
+
+.gov-header {
+  height: 92px;
+  flex-shrink: 0;
+  padding: 0 40px;
+  background: #fdfcf8;
+  border-bottom: 1px solid #e3ddce;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.gov-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.emblem-badge {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #1c2b24;
+}
+
+.emblem-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.gov-header-divider {
+  width: 1px;
+  height: 44px;
+  background: #ddd6c3;
+  flex-shrink: 0;
+}
+
+.ministry-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ministry-line1 {
+  font-size: 11px;
+  color: #4a4436;
+}
+
+.ministry-line2 {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: #1c2b24;
+}
+
+.ministry-line3 {
+  font-size: 9.5px;
+  color: #7a7361;
+}
+
+.gov-header-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.brand-mark-badge {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+
+  border: 1.5px solid #1f4d3d;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #1f4d3d;
+  flex-shrink: 0;
+}
+
+.brand-mark-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.brand-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1f4d3d;
+  letter-spacing: 0.3px;
+  line-height: 1.1;
+}
+
+.brand-subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #5f6b62;
+}
+
+.gov-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2b24;
+
+  flex-shrink: 0;
+}
+
+.portal-icon {
+  width: 17px;
+  height: 17px;
+  color: #1f4d3d;
+}
+
+/* ───────────── Hero (photo background) ───────────── */
+
+.gov-hero {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+
+  display: flex;
+  align-items: center;
+}
+
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+
+  background:
+    radial-gradient(circle at 25% 75%, rgba(255,255,255,0.05) 0%, transparent 40%),
+    linear-gradient(120deg, #2c3b32 0%, #3f5044 35%, #6b7d5e 70%, #8b9b6f 100%);
+}
+
+/* Once you add a real photo to /public/hero.jpg, replace the block above with:
+.hero-photo {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: url("/hero.jpg");
+  background-size: cover;
+  background-position: center;
+}
+*/
+
+.hero-photo-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+
+  background: linear-gradient(
+    90deg,
+    rgba(10, 20, 15, 0.55) 0%,
+    rgba(10, 20, 15, 0.25) 45%,
+    rgba(10, 20, 15, 0.05) 65%
+  );
+}
+
+.hero-text {
+  position: relative;
+  z-index: 2;
+
+  padding: 0 60px;
+  max-width: 640px;
+}
+
+.hero-text h1 {
+  margin: 0;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.2;
+  font-weight: 700;
+
+  color: #ffffff;
+}
+
+.hero-accent-line {
+  width: 60px;
+  height: 3px;
+  margin: 18px 0;
+
+  background: #6fcf97;
+}
+
+.hero-description {
+  margin: 0;
+  max-width: 400px;
+
+  font-size: 14px;
+  line-height: 1.6;
+  color: #eef4ee;
+}
+
+/* ───────────── Sign-in card ───────────── */
+
+.signin-card {
+  position: relative;
+  z-index: 2;
+
+  width: 400px;
+  max-width: calc(100% - 60px);
+  max-height: calc(100% - 60px);
+
+  margin-right: 60px;
+  margin-left: auto;
+
+  overflow-y: auto;
+
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+
+  padding: 24px 28px;
+}
+
+.signin-card-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1f4d3d;
+  letter-spacing: 0.6px;
+}
+
+.signin-eyebrow-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.signin-card h2 {
+  margin: 10px 0 3px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1c2b24;
+}
+
+.signin-subtext {
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  color: #6b756e;
+}
+
+.gov-field {
+  margin-bottom: 13px;
+}
+
+.gov-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+
+  border: 1px solid #dcd6c6;
+  border-radius: 8px;
+  background: #fbfaf6;
+}
+
+.gov-input-wrapper:focus-within {
+  border-color: #1f4d3d;
+}
+
+.input-icon {
+  width: 16px;
+  height: 16px;
+  margin-left: 12px;
+  color: #8a8571;
+  flex-shrink: 0;
+}
+
+.gov-input-wrapper input {
+  flex: 1;
+  min-width: 0;
+
+  border: none;
+  background: transparent;
+  outline: none;
+
+  padding: 12px 12px;
+
+  font-family: inherit;
+  font-size: 13px;
+  color: #1c2b24;
+}
+
+.gov-input-wrapper input::placeholder {
+  color: #9a947f;
+}
+
+.eye-toggle {
+  border: none;
+  background: transparent;
+  padding: 0 12px;
+
+  display: flex;
+  align-items: center;
+
+  color: #8a8571;
+  cursor: pointer;
+}
+
+.eye-toggle svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gov-form-options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin: 12px 0 16px;
+}
+
+.gov-remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  font-size: 11.5px;
+  color: #4a5750;
+  cursor: pointer;
+}
+
+.gov-forgot {
+  border: none;
+  background: transparent;
+  padding: 0;
+
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #1f4d3d;
+  cursor: pointer;
+}
+
+.gov-signin-button {
+  width: 100%;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #1f4d3d;
+  color: #ffffff;
+
+  padding: 13px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+
+  font-size: 13.5px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.signin-arrow {
+  width: 16px;
+  height: 16px;
+}
+
+.gov-or-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin: 14px 0;
+
+  font-size: 10px;
+  font-weight: 700;
+  color: #9a947f;
+  letter-spacing: 1px;
+
+  position: relative;
+}
+
+.gov-or-divider::before,
+.gov-or-divider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: #e3ddce;
+}
+
+.gov-or-divider::before { left: 0; }
+.gov-or-divider::after { right: 0; }
+
+.gov-biometric-button {
+  width: 100%;
+
+  border: 1px solid #dcd6c6;
+  border-radius: 8px;
+  background: #ffffff;
+
+  padding: 11px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+
+  font-size: 12px;
+  font-weight: 600;
+  color: #1c2b24;
+
+  cursor: pointer;
+}
+
+.gov-biometric-button svg {
+  width: 17px;
+  height: 17px;
+  color: #1f4d3d;
+}
+
+/* ───────────── Quick features strip ───────────── */
+
+.quick-strip {
+  flex-shrink: 0;
+
+  background: #f0ede3;
+  padding: 16px 60px;
+
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+
+.quick-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.quick-icon-circle {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 50%;
+
+  background: #e2ecdf;
+  color: #1f4d3d;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-icon-circle svg {
+  width: 17px;
+  height: 17px;
+}
+
+.quick-strip-item strong {
+  display: block;
+  font-size: 12.5px;
+  color: #1c2b24;
+}
+
+.quick-strip-item span {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: #6b756e;
+}
+
+/* ───────────── Footer ───────────── */
+
+.gov-footer {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 0 40px;
+
+  background: #1f4d3d;
+  color: #eef4ef;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  font-size: 10.5px;
+}
+
+.gov-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.footer-divider {
+  opacity: 0.5;
+}
+
+.gov-footer-right {
+  font-weight: 600;
+  opacity: 0.9;
+  letter-spacing: 0.5px;
+}
+
+/* ───────────── Responsive ───────────── */
+
+@media (max-width: 1100px) {
+
+  .gov-page {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .gov-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 560px;
+    padding: 30px 0;
+  }
+
+  .hero-text {
+    padding: 0 24px;
+    margin-bottom: 24px;
+  }
+
+  .signin-card {
+    margin: 0 24px;
+    width: calc(100% - 48px);
+    max-height: none;
+  }
+
+  .quick-strip {
+    grid-template-columns: 1fr 1fr;
+    padding: 24px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 700px) {
+
+  .gov-header {
+    padding: 0 20px;
+    flex-wrap: wrap;
+    height: auto;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    gap: 10px;
+  }
+
+  .gov-header-center {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .hero-text h1 {
+    font-size: 30px;
+  }
+
+  .quick-strip {
+    grid-template-columns: 1fr;
+  }
+}

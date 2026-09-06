@@ -1,0 +1,352 @@
+.new-inspection-page {
+  min-height: 100vh;
+  background: #221631;
+  color: #F4EEDD;
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* ───────────── Header ───────────── */
+
+.new-inspection-header {
+  height: 92px;
+  padding: 0 38px;
+  border-bottom: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.new-inspection-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.new-inspection-brand-mark {
+  width: 38px;
+  height: 38px;
+
+  border: 1px solid #F2A03D;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  color: #F2A03D;
+}
+
+.new-inspection-brand-name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  color: #F4EEDD;
+}
+
+.new-inspection-brand-subtitle {
+  margin-top: 2px;
+  font-size: 8px;
+  letter-spacing: 1.8px;
+  color: #B7A8CE;
+}
+
+.inspection-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #B7A8CE;
+}
+
+.inspection-progress strong {
+  color: #F4EEDD;
+}
+
+
+/* ───────────── Main ───────────── */
+
+.new-inspection-main {
+  width: min(1120px, calc(100% - 90px));
+  margin: 0 auto;
+  padding: 55px 0 45px;
+  flex: 1;
+}
+
+.new-inspection-intro {
+  max-width: 700px;
+}
+
+.new-inspection-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  color: #F2A03D;
+}
+
+.new-inspection-intro h1 {
+  margin: 12px 0 10px;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 44px;
+  line-height: 1.05;
+  font-weight: 400;
+  color: #F4EEDD;
+}
+
+
+/* ───────────── Inspection Form ───────────── */
+
+.inspection-form {
+  margin-top: 42px;
+
+  border: 1px solid #453361;
+  background: #2E1F42;
+}
+
+
+/* ───────────── Section Heading ───────────── */
+
+.form-section-heading {
+  padding: 24px 28px;
+
+  display: flex;
+  gap: 20px;
+
+  border-bottom: 1px solid #453361;
+}
+
+.form-section-heading > span {
+  color: #F2A03D;
+  font-size: 10px;
+  letter-spacing: 1px;
+  font-weight: 600;
+}
+
+.form-section-heading h2 {
+  margin: 0;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 23px;
+  font-weight: 400;
+  color: #F4EEDD;
+}
+
+.form-section-heading p {
+  margin: 6px 0 0;
+
+  font-size: 11px;
+  line-height: 1.5;
+  color: #B7A8CE;
+}
+
+
+/* ───────────── Fields ───────────── */
+
+.form-grid {
+  padding: 30px 28px;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 25px 32px;
+}
+
+.inspection-field {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.inspection-field label {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  font-weight: 600;
+  color: #B7A8CE;
+}
+
+.inspection-field input,
+.inspection-field select {
+  width: 100%;
+  box-sizing: border-box;
+
+  height: 48px;
+
+  padding: 0 14px;
+
+  border: 1px solid #453361;
+  background: #221631;
+
+  color: #F4EEDD;
+
+  font-family: inherit;
+  font-size: 13px;
+
+  outline: none;
+}
+
+.inspection-field input:focus,
+.inspection-field select:focus {
+  border-color: #F2A03D;
+}
+
+.inspection-field input::placeholder {
+  color: #7A6C90;
+}
+
+.inspection-field select {
+  cursor: pointer;
+}
+
+
+/* ───────────── Auto-generated ID ───────────── */
+
+.field-readonly {
+  height: 48px;
+  padding: 0 14px;
+  box-sizing: border-box;
+
+  border: 1px solid #453361;
+  background: #221631;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  color: #F4EEDD;
+}
+
+.field-readonly span {
+  font-family: inherit;
+
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #7A6C90;
+}
+
+
+/* ───────────── Product Information ───────────── */
+
+.optional-section {
+  border-top: 1px solid #453361;
+}
+
+.product-grid {
+  padding-top: 25px;
+}
+
+
+/* ───────────── Actions ───────────── */
+
+.new-inspection-actions {
+  padding: 22px 28px;
+
+  border-top: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.new-inspection-back {
+  border: none;
+  background: transparent;
+
+  padding: 0;
+
+  color: #B7A8CE;
+
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+
+  cursor: pointer;
+}
+
+.new-inspection-back:hover {
+  color: #F4EEDD;
+}
+
+.new-inspection-continue {
+  border: none;
+
+  min-width: 250px;
+
+  padding: 15px 18px;
+
+  background: #F2A03D;
+  color: #221631;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.1px;
+
+  cursor: pointer;
+}
+
+.new-inspection-continue span {
+  color: #221631;
+  font-size: 17px;
+}
+
+
+/* ───────────── Footer ───────────── */
+
+.new-inspection-footer {
+  min-height: 54px;
+
+  padding: 0 38px;
+
+  border-top: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  color: #7A6C90;
+
+  font-size: 8px;
+  letter-spacing: 1.3px;
+}
+
+
+/* ───────────── Responsive ───────────── */
+
+@media (max-width: 800px) {
+
+  .new-inspection-main {
+    width: calc(100% - 40px);
+    padding-top: 40px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .new-inspection-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 18px;
+  }
+
+  .new-inspection-continue {
+    width: 100%;
+  }
+
+  .new-inspection-footer {
+    padding: 18px 20px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}

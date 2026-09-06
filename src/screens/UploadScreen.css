@@ -1,0 +1,387 @@
+.upload-page {
+  min-height: 100vh;
+  background: #221631;
+  color: #F4EEDD;
+  display: flex;
+  flex-direction: column;
+}
+
+
+/* ───────────── Header ───────────── */
+
+.upload-header {
+  height: 92px;
+  padding: 0 38px;
+  border-bottom: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.upload-brand-mark {
+  width: 38px;
+  height: 38px;
+
+  border: 1px solid #F2A03D;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 20px;
+  color: #F2A03D;
+}
+
+.upload-brand-name {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+}
+
+.upload-brand-subtitle {
+  margin-top: 2px;
+  font-size: 8px;
+  letter-spacing: 1.8px;
+  color: #B7A8CE;
+}
+
+.upload-step {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: #B7A8CE;
+}
+
+.upload-step strong {
+  color: #F4EEDD;
+}
+
+
+/* ───────────── Main ───────────── */
+
+.upload-main {
+  width: min(1200px, calc(100% - 90px));
+  margin: 0 auto;
+  padding: 55px 0 45px;
+  flex: 1;
+}
+
+.upload-heading {
+  max-width: 720px;
+}
+
+.upload-eyebrow {
+  font-size: 10px;
+  letter-spacing: 2px;
+  font-weight: 600;
+  color: #F2A03D;
+}
+
+.upload-heading h1 {
+  margin: 12px 0 10px;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 44px;
+  line-height: 1.05;
+  font-weight: 400;
+  color: #F4EEDD;
+}
+
+.upload-heading p {
+  margin: 0;
+
+  max-width: 690px;
+
+  font-size: 14px;
+  line-height: 1.7;
+
+  color: #B7A8CE;
+}
+
+
+/* ───────────── Package Views ───────────── */
+
+.package-views {
+  margin-top: 42px;
+
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.package-view-card {
+  border: 1px solid #453361;
+  background: #2E1F42;
+}
+
+
+/* Card top */
+
+.view-card-top {
+  height: 42px;
+  padding: 0 18px;
+
+  border-bottom: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #7A6C90;
+}
+
+.view-card-top span:first-child {
+  color: #F2A03D;
+  font-weight: 600;
+}
+
+.view-required {
+  color: #F2A03D !important;
+}
+
+
+/* Upload area */
+
+.view-upload-area {
+  min-height: 245px;
+  padding: 30px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  text-align: center;
+}
+
+.upload-icon {
+  width: 42px;
+  height: 42px;
+
+  border: 1px solid #7A6C90;
+  border-radius: 50%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #F2A03D;
+
+  font-size: 20px;
+
+  margin-bottom: 17px;
+}
+
+.view-upload-area h2 {
+  margin: 0;
+
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 22px;
+  font-weight: 400;
+
+  color: #F4EEDD;
+}
+
+.view-upload-area p {
+  margin: 8px 0 18px;
+
+  font-size: 12px;
+  color: #B7A8CE;
+}
+
+
+/* Add image */
+
+.upload-image-button {
+  border: 1px solid #F2A03D;
+  background: transparent;
+
+  padding: 10px 20px;
+
+  color: #F2A03D;
+
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.upload-image-button:hover {
+  background: #F2A03D;
+  color: #221631;
+}
+
+
+/* ───────────── Actions ───────────── */
+
+.upload-actions {
+  margin-top: 30px;
+  padding-top: 22px;
+
+  border-top: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.upload-back-button {
+  border: none;
+  background: transparent;
+
+  padding: 0;
+
+  color: #B7A8CE;
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.3px;
+
+  cursor: pointer;
+}
+
+.upload-back-button:hover {
+  color: #F4EEDD;
+}
+
+.upload-progress {
+  font-size: 9px;
+  letter-spacing: 1.4px;
+  color: #7A6C90;
+}
+
+.upload-continue-button {
+  border: none;
+
+  background: #F2A03D;
+  color: #221631;
+
+  min-width: 220px;
+
+  padding: 15px 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 22px;
+
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+
+  cursor: pointer;
+}
+
+.upload-continue-button span {
+  color: #221631;
+  font-size: 17px;
+}
+
+
+/* ───────────── Footer ───────────── */
+
+.upload-footer {
+  min-height: 54px;
+
+  padding: 0 38px;
+
+  border-top: 1px solid #453361;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  color: #7A6C90;
+
+  font-size: 8px;
+  letter-spacing: 1.3px;
+}
+
+
+/* ───────────── New: Real image preview ───────────── */
+
+.view-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.preview-image {
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border: 1px solid #453361;
+}
+
+.preview-filename {
+  font-size: 8px;
+  color: #7A6C90;
+  letter-spacing: 0.5px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-continue-button:disabled {
+  background: #453361;
+  color: #7A6C90;
+  cursor: not-allowed;
+}
+
+
+/* ───────────── Responsive ───────────── */
+
+@media (max-width: 800px) {
+
+  .upload-main {
+    width: calc(100% - 40px);
+    padding-top: 40px;
+  }
+
+  .upload-heading h1 {
+    font-size: 36px;
+  }
+
+  .package-views {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-actions {
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+
+  .upload-progress {
+    order: 3;
+    width: 100%;
+  }
+
+  .upload-footer {
+    padding: 18px 20px;
+
+    flex-direction: column;
+    gap: 8px;
+
+    align-items: flex-start;
+  }
+}
