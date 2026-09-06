@@ -1,5 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./NewInspectionScreen.css";
+
+const MONTHS_SHORT = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC",
+];
+
+// Converts "2026-09-06" -> "06 SEP 2026" to match DashboardScreen's
+// parseDisplayDate format (DD MON YYYY).
+function toDisplayDate(isoDate) {
+  if (!isoDate) return "";
+  const [year, month, day] = isoDate.split("-");
+  const monthName = MONTHS_SHORT[Number(month) - 1] || "";
+  return `${day} ${monthName} ${year}`;
+}
 
 function NewInspectionScreen({ onBack, onContinue }) {
   const [productName, setProductName] = useState("");
@@ -10,6 +24,34 @@ function NewInspectionScreen({ onBack, onContinue }) {
   const [isImported, setIsImported] = useState(false);
   const [isExempt, setIsExempt] = useState(false);
 
+  // --- Geo-tagging: capture the officer's location as soon as this
+  // screen opens, so it can be attached to the inspection record and
+  // final report as proof of where the check took place. ---
+  const [location, setLocation] = useState(null); // { lat, lng, accuracy, capturedAt }
+  const [locationStatus, setLocationStatus] = useState("loading"); // loading | success | error | unsupported
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      setLocationStatus("unsupported");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocation({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          accuracy: pos.coords.accuracy,
+          capturedAt: Date.now(),
+        });
+        setLocationStatus("success");
+      },
+      () => {
+        setLocationStatus("error");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }, []);
+
   const handleContinue = () => {
     onContinue({
       productName: productName.trim() || "Unnamed Product",
@@ -17,8 +59,10 @@ function NewInspectionScreen({ onBack, onContinue }) {
       category: category || "Not specified",
       inspectionType: inspectionType || "Not specified",
       inspectionDate,
+      date: toDisplayDate(inspectionDate), // field DashboardScreen actually reads
       isImported,
       isExempt,
+      location, // null if capture failed/denied — handled downstream
     });
   };
 
@@ -51,6 +95,31 @@ function NewInspectionScreen({ onBack, onContinue }) {
           <span className="nis-step-arrow">→</span>
           <span className="nis-step">03 Verification</span>
         </div>
+      </div>
+
+      {/* GEO-TAG STATUS STRIP */}
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "10px 16px", borderRadius: 8, marginBottom: 20,
+          fontSize: 12.5, fontWeight: 600,
+          background:
+            locationStatus === "success" ? "#e7f2ea" :
+            locationStatus === "loading" ? "#f7ecd8" : "#fbe8e4",
+          color:
+            locationStatus === "success" ? "#17512f" :
+            locationStatus === "loading" ? "#a8711f" : "#a3372a",
+        }}
+      >
+        {locationStatus === "loading" && "📍 Capturing inspection location…"}
+        {locationStatus === "success" && location && (
+          <>
+            📍 Location captured: {location.lat.toFixed(5)}°N, {location.lng.toFixed(5)}°E
+            {" "}(±{Math.round(location.accuracy)}m)
+          </>
+        )}
+        {locationStatus === "error" && "⚠ Location access denied — inspection will proceed without geo-tag. Enable location permission for evidentiary compliance."}
+        {locationStatus === "unsupported" && "⚠ Geolocation not supported on this device — inspection will proceed without geo-tag."}
       </div>
 
       <div className="nis-card">

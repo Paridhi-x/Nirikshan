@@ -23,6 +23,35 @@ function computeOverallStatus(rows, isExemptCase) {
   return { label: "REVIEW REQUIRED", color: "#e8a23d", bg: "#fbf1e3" };
 }
 
+// Maps the report's detailed statutory label to the simple lowercase
+// status the Dashboard table filters/badges rely on.
+function mapToDashboardStatus(overallStatusLabel) {
+  if (overallStatusLabel === "LIKELY COMPLIANT" || overallStatusLabel === "EXEMPT") {
+    return "compliant";
+  }
+  if (overallStatusLabel === "NON-COMPLIANT") {
+    return "flagged";
+  }
+  return "pending"; // REVIEW REQUIRED
+}
+
+// Applies the officer's confirm/dismiss decisions from the Findings screen
+// onto the raw OCR declaration rows. A dismissed finding means the officer
+// determined it was a false positive — that field is treated as compliant
+// from here on. A confirmed finding keeps the row as non-compliant.
+function applyFindingsOverride(rows, findings) {
+  return rows.map((row) => {
+    const finding = findings.find((f) => f.rowKey === row.key);
+    if (finding && finding.status === "dismissed") {
+      return { ...row, found: true, officerOverride: "dismissed" };
+    }
+    if (finding && finding.status === "confirmed") {
+      return { ...row, officerOverride: "confirmed" };
+    }
+    return row;
+  });
+}
+
 function formatDateTime(ms) {
   if (!ms) return null;
   const d = new Date(ms);
@@ -48,10 +77,16 @@ function ReportScreen({
   const [isFinalized, setIsFinalized] = useState(false);
   const [markedForReview, setMarkedForReview] = useState(true);
 
-  const rows = declarationRows || [];
+  const rawRows = declarationRows || [];
   const allFindings = findings || [];
   const product = productInfo || {};
   const isExemptCase = Boolean(product.isExempt);
+  const location = product.location || null; // { lat, lng, accuracy, capturedAt }
+
+  // Rows adjusted for the officer's Findings-screen decisions — everything
+  // below (score, status, warning box, Firestore save) uses these, not the
+  // raw OCR rows, so a dismissed finding is no longer treated as a violation.
+  const rows = applyFindingsOverride(rawRows, allFindings);
 
   const totalFields = rows.length;
   const validCount = rows.filter((r) => r.found).length;
@@ -92,6 +127,10 @@ function ReportScreen({
   const ocrTime = formatDateTime(ocrCompletedAt);
   const reviewTime = formatDateTime(findingsReviewedAt);
 
+  const mapsUrl = location
+    ? `https://www.google.com/maps?q=${location.lat},${location.lng}`
+    : null;
+
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
     try {
@@ -123,6 +162,21 @@ function ReportScreen({
 
     setIsFinalizing(true);
     try {
+      // --- Fields the Dashboard table/filters/stats actually read ---
+      const dashboardStatus = mapToDashboardStatus(overallStatus.label);
+
+      const netQtyRow = rows.find((r) => r.key === "netQuantity");
+      const productSub =
+        [netQtyRow?.value, product.category].filter(Boolean).join(" · ") ||
+        product.category ||
+        "Packaged Commodity";
+
+      const firstCriticalMissing = notFoundRows.find((r) =>
+        ["mrp", "mfgDate", "manufacturer"].includes(r.key)
+      );
+      const flagReason =
+        dashboardStatus === "flagged" ? firstCriticalMissing?.rule || null : null;
+
       await addDoc(collection(db, "inspections"), {
         inspectionId,
         productName: product.productName || "Unnamed Product",
@@ -131,7 +185,27 @@ function ReportScreen({
         inspectionType: product.inspectionType || "Not specified",
         isImported: Boolean(product.isImported),
         isExempt: isExemptCase,
+
+        // Detailed statutory label (used by ReportScreen / audit trail)
         overallStatus: overallStatus.label,
+
+        // Simplified fields the Dashboard reads directly
+        status: dashboardStatus,
+        date: reportDate,
+        productSub,
+        flagReason,
+
+        // Geo-tag captured at inspection start — null if permission was
+        // denied or unsupported, handled gracefully everywhere it's read.
+        location: location
+          ? {
+              lat: location.lat,
+              lng: location.lng,
+              accuracy: location.accuracy,
+              capturedAt: location.capturedAt,
+            }
+          : null,
+
         score: isExemptCase ? null : score,
         validCount: isExemptCase ? null : validCount,
         totalFields: isExemptCase ? null : totalFields,
@@ -176,10 +250,18 @@ function ReportScreen({
             Legal Metrology (Packaged Commodities) Rules, 2011. No mandatory
             declaration checks apply, and no compliance findings were generated.
           </p>
+          {location && (
+            <p style={{ marginTop: 12, fontSize: 13, color: "#6b7268" }}>
+              📍 Inspection location: {location.lat.toFixed(5)}°N, {location.lng.toFixed(5)}°E{" "}
+              (<a href={mapsUrl} target="_blank" rel="noopener noreferrer">View on map</a>)
+            </p>
+          )}
         </div>
         <div className="rpt-bottombar">
           <button className="rpt-back-link" onClick={onBack}>← Return to Analysis</button>
-          <button className="rpt-finalize-btn" onClick={onDashboard}>Return to Dashboard →</button>
+          <button className="rpt-finalize-btn" onClick={handleFinalizeReport} disabled={isFinalizing || isFinalized}>
+            {isFinalized ? "Report Finalized ✓" : isFinalizing ? "Saving..." : "Finalize Report →"}
+          </button>
         </div>
       </div>
     );
@@ -230,6 +312,18 @@ function ReportScreen({
               <div>
                 <span>INSPECTING OFFICER</span>
                 <strong>{officerName || "Unnamed Officer"}</strong>
+              </div>
+              <div>
+                <span>INSPECTION LOCATION</span>
+                {location ? (
+                  <strong>
+                    <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "inherit" }}>
+                      {location.lat.toFixed(4)}°N, {location.lng.toFixed(4)}°E ↗
+                    </a>
+                  </strong>
+                ) : (
+                  <strong style={{ color: "#a3372a" }}>Not captured</strong>
+                )}
               </div>
             </div>
           </div>
@@ -285,6 +379,16 @@ function ReportScreen({
                   {row.value || `Not detected${row.value === null ? "" : ""}`}
                   {!row.found && (
                     <span className="rpt-finding-subnote">Not detected in uploaded specimen</span>
+                  )}
+                  {row.officerOverride === "dismissed" && (
+                    <span className="rpt-finding-subnote" style={{ color: "#2fa66b" }}>
+                      Officer verified on-site — finding dismissed
+                    </span>
+                  )}
+                  {row.officerOverride === "confirmed" && (
+                    <span className="rpt-finding-subnote" style={{ color: "#e14b3a" }}>
+                      Officer confirmed this violation
+                    </span>
                   )}
                 </div>
               </div>
@@ -351,6 +455,14 @@ function ReportScreen({
                 <span>OCR Engine</span>
                 <strong>Tesseract.js (client-side)</strong>
               </div>
+              <div>
+                <span>Geo-Tag</span>
+                <strong>
+                  {location
+                    ? `±${Math.round(location.accuracy)}m accuracy`
+                    : "Not available"}
+                </strong>
+              </div>
             </div>
           </div>
 
@@ -386,6 +498,7 @@ function ReportScreen({
               remain subject to authorized inspector review.
               {ocrTime && ` OCR completed ${ocrTime.date}, ${ocrTime.time}.`}
               {reviewTime && ` Findings reviewed ${reviewTime.date}, ${reviewTime.time}.`}
+              {location && ` Inspection geo-tagged at capture time with ±${Math.round(location.accuracy)}m accuracy.`}
             </p>
           </div>
         </div>

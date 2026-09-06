@@ -8,6 +8,7 @@ import ScanScreen from "./screens/ScanScreen";
 import ReviewScreen from "./screens/ReviewScreen";
 import FindingsScreen from "./screens/FindingsScreen";
 import ReportScreen from "./screens/ReportScreen";
+import InspectionHistoryScreen from "./screens/InspectionHistoryScreen";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -138,10 +139,20 @@ function App() {
     );
   }
 
+  if (currentScreen === "inspection-history") {
+    return (
+      <InspectionHistoryScreen
+        onBack={() => setCurrentScreen("dashboard")}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   return (
     <DashboardScreen
       onLogout={handleLogout}
       onNewInspection={startNewInspection}
+      onViewHistory={() => setCurrentScreen("inspection-history")}
     />
   );
 }

@@ -1,5 +1,60 @@
 import { createWorker } from "tesseract.js";
 
+/* ─────────────────────────────────────────────────────────
+   IMAGE PREPROCESSING — this is the single biggest lever for
+   OCR accuracy on phone photos of shiny/curved packaging:
+   - grayscale
+   - contrast boost
+   - upscale small images (tiny text needs more pixels)
+   ───────────────────────────────────────────────────────── */
+
+async function preprocessImage(file) {
+  const imgUrl = URL.createObjectURL(file);
+
+  const img = await new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = imgUrl;
+  });
+
+  const MAX_DIM = 2200;
+  let { width, height } = img;
+
+  // Upscale small/medium photos (helps Tesseract read small print),
+  // but cap so huge phone photos don't blow up memory/time.
+  let scale = 1;
+  if (Math.max(width, height) < 1600) {
+    scale = 1.6;
+  }
+  scale = Math.min(scale, MAX_DIM / Math.max(width, height));
+  width = Math.round(width * scale);
+  height = Math.round(height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // grayscale
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    // contrast stretch around midpoint — makes printed text pop against background
+    let val = (gray - 128) * 1.4 + 128;
+    val = Math.max(0, Math.min(255, val));
+    data[i] = data[i + 1] = data[i + 2] = val;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+  URL.revokeObjectURL(imgUrl);
+
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/png", 1));
+}
+
 export async function runOCR(imageFile, onProgress) {
   const worker = await createWorker("eng", 1, {
     logger: (m) => {
@@ -9,7 +64,13 @@ export async function runOCR(imageFile, onProgress) {
     },
   });
 
-  const { data } = await worker.recognize(imageFile);
+  // Auto page segmentation handles mixed layouts (front-of-pack + tables) best.
+  await worker.setParameters({
+    tessedit_pageseg_mode: "3", // PSM.AUTO
+  });
+
+  const processedBlob = await preprocessImage(imageFile);
+  const { data } = await worker.recognize(processedBlob);
   await worker.terminate();
 
   const rawText = data.text || "";
@@ -21,25 +82,80 @@ export async function runOCR(imageFile, onProgress) {
   return { rawText, lines };
 }
 
+/* ───────────── OCR digit-confusion cleanup ─────────────
+   Tesseract commonly confuses O/0, l/I/1, S/5 in printed
+   numbers on packaging. Only applied to captures we already
+   know SHOULD be numeric (price, quantity), so it's safe. */
+
+function normalizeOcrDigits(str) {
+  return str
+    .replace(/[oO]/g, "0")
+    .replace(/[lI]/g, "1")
+    .replace(/[Ss](?=\d|$)/g, "5");
+}
+
 /* ───────────── Search current + adjacent lines for a field's value ───────────── */
 
 function findNearValue(lines, labelRegex, valueRegex, options = {}) {
   const excludeRegex = options.exclude || null;
+  // NEW: optional validate(match) => bool. If a match fails validation
+  // (e.g. an implausible date), keep searching instead of accepting it.
+  const validate = options.validate || (() => true);
 
   for (let i = 0; i < lines.length; i++) {
     if (excludeRegex && excludeRegex.test(lines[i])) continue;
     if (!labelRegex.test(lines[i])) continue;
 
-    const candidates = [lines[i], lines[i + 1], lines[i - 1]].filter(Boolean);
+    // FIX: strip the label text out of the current line first, so the value
+    // regex can't accidentally match part of the label itself as the value.
+    const sameLineRemainder = lines[i].replace(labelRegex, " ").trim();
+
+    const candidates = [sameLineRemainder, lines[i + 1], lines[i - 1]].filter(Boolean);
 
     for (const line of candidates) {
       const match = line.match(valueRegex);
-      if (match) {
+      if (match && validate(match)) {
         return match;
       }
     }
   }
   return null;
+}
+
+/* Rejects OCR "dates" that can't be real — e.g. a license/batch number that
+   happens to look like d/d/dd but resolves to an impossible or absurd date. */
+function isPlausibleDate(str) {
+  const monthMap = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  const currentYear = new Date().getFullYear();
+
+  const textMatch = str.match(new RegExp(`(${Object.keys(monthMap).join("|")})[a-z]*\\.?\\s*'?(\\d{2,4})`, "i"));
+  if (textMatch) {
+    let year = parseInt(textMatch[2], 10);
+    if (year < 100) year += 2000;
+    return year >= 2015 && year <= currentYear + 1;
+  }
+
+  const parts = str.split(/[\/\-]/).map((p) => parseInt(p, 10));
+  if (parts.length === 3) {
+    const [d, m, yRaw] = parts;
+    let y = yRaw;
+    if (y < 100) y += 2000;
+    if (Number.isNaN(d) || Number.isNaN(m) || Number.isNaN(y)) return false;
+    if (m < 1 || m > 12) return false;
+    if (d < 1 || d > 31) return false;
+    if (y < 2015 || y > currentYear + 1) return false;
+    return true;
+  }
+  if (parts.length === 2) {
+    const [m, yRaw] = parts;
+    let y = yRaw;
+    if (y < 100) y += 2000;
+    if (Number.isNaN(m) || Number.isNaN(y)) return false;
+    if (m < 1 || m > 12) return false;
+    if (y < 2015 || y > currentYear + 1) return false;
+    return true;
+  }
+  return false;
 }
 
 export function extractDeclarations({ rawText, lines }) {
@@ -62,6 +178,7 @@ export function extractDeclarations({ rawText, lines }) {
 const COMMON_WORDS = new Set([
   "and", "for", "the", "with", "from", "see", "below", "above",
   "net", "wt", "no", "date", "best", "before", "use", "by",
+  "made", "product", "origin", "country", "of", "packed", "manufactured",
 ]);
 
 function isLikelyGarbage(value) {
@@ -77,7 +194,9 @@ function isLikelyGarbage(value) {
 
 function detectManufacturer(rows, fallbackText) {
   const labelRegex = /(anufactur|marketed|packed\s*by|imported\s*by|mfd\s*by)/i;
-  const valueRegex = /(?:by|for)?\s*[:\-]?\s*([A-Za-z][A-Za-z0-9&.,\s]{5,60})/i;
+  // FIX: value regex no longer needs an optional "by/for" prefix, since
+  // findNearValue already strips the label (incl. "by"/"for") before this runs.
+  const valueRegex = /([A-Za-z][A-Za-z0-9&.,\s]{5,60})/i;
 
   const match = findNearValue(rows, labelRegex, valueRegex);
   if (match) {
@@ -117,18 +236,21 @@ function detectGenericName(text) {
 
 function detectNetQuantity(rows, fallbackText) {
   const labelRegex = /quantity|net\s*wt/i;
-  const valueRegex = /(\d+(?:\.\d+)?)\s*(g|kg|ml|l|gm|litre|liter)\b/i;
+  // FIX: tolerate OCR digit confusion (O/l/I/S <-> 0/1/5), normalize after match.
+  const valueRegex = /([0-9oOlIsS]+(?:[.,][0-9oOlIsS]+)?)\s*(g|kg|ml|l|gm|litre|liter)\b/i;
 
   const match = findNearValue(rows, labelRegex, valueRegex);
   if (match) {
-    return { found: true, value: `${match[1]} ${match[2]}`, confidence: "high", rule: "Rule 6(1)(c)" };
+    const num = normalizeOcrDigits(match[1]);
+    return { found: true, value: `${num} ${match[2]}`, confidence: "high", rule: "Rule 6(1)(c)" };
   }
 
   const fallbackMatch = fallbackText.match(
-    /Net\s*(?:Qty|Quantity|Wt\.?|Weight)\s*[:\-]?\s*(\d+(?:\.\d+)?)\s*(g|kg|ml|l|gm|litre|liter)/i
+    /Net\s*(?:Qty|Quantity|Wt\.?|Weight)\s*[:\-]?\s*([0-9oOlIsS]+(?:[.,][0-9oOlIsS]+)?)\s*(g|kg|ml|l|gm|litre|liter)/i
   );
   if (fallbackMatch) {
-    return { found: true, value: `${fallbackMatch[1]} ${fallbackMatch[2]}`, confidence: "medium", rule: "Rule 6(1)(c)" };
+    const num = normalizeOcrDigits(fallbackMatch[1]);
+    return { found: true, value: `${num} ${fallbackMatch[2]}`, confidence: "medium", rule: "Rule 6(1)(c)" };
   }
 
   return { found: false, value: null, confidence: "none", rule: "Rule 6(1)(c)" };
@@ -136,20 +258,32 @@ function detectNetQuantity(rows, fallbackText) {
 
 /* ───────────── Rule 6(1)(e) — Month & Year of Manufacture/Packing ───────────── */
 
+const MONTH_NAMES = "jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec";
+
 function detectDate(rows, fallbackText) {
   const labelRegex = /date/i;
   const excludeRegex = /use\s*by|exp|best\s*before/i;
-  const valueRegex = /(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}[\/\-]\d{4})/;
+  // Numeric OR textual-month formats, e.g. "01/2026", "05-2026", "JAN 2026", "JAN'26"
+  const valueRegex = new RegExp(
+    `(\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|\\d{1,2}[\\/\\-]\\d{4}|(?:${MONTH_NAMES})[a-z]*\\.?\\s*'?\\d{2,4})`,
+    "i"
+  );
 
-  const match = findNearValue(rows, labelRegex, valueRegex, { exclude: excludeRegex });
+  const match = findNearValue(rows, labelRegex, valueRegex, {
+    exclude: excludeRegex,
+    validate: (m) => isPlausibleDate(m[1]),
+  });
   if (match) {
     return { found: true, value: match[1], confidence: "high", rule: "Rule 6(1)(e)" };
   }
 
   const fallbackMatch = fallbackText.match(
-    /(?:Mfg|Mfd|Packed|Packing)\.?\s*(?:Date|On)?\s*[:\-]?\s*(\d{1,2}[\/\-]\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i
+    new RegExp(
+      `(?:Mfg|Mfd|Packed|Packing)\\.?\\s*(?:Date|On)?\\s*[:\\-]?\\s*(\\d{1,2}[\\/\\-]\\d{4}|\\d{1,2}[\\/\\-]\\d{1,2}[\\/\\-]\\d{2,4}|(?:${MONTH_NAMES})[a-z]*\\.?\\s*'?\\d{2,4})`,
+      "i"
+    )
   );
-  if (fallbackMatch) {
+  if (fallbackMatch && isPlausibleDate(fallbackMatch[1])) {
     return { found: true, value: fallbackMatch[1], confidence: "medium", rule: "Rule 6(1)(e)" };
   }
 
@@ -160,15 +294,19 @@ function detectDate(rows, fallbackText) {
 
 function detectMRP(rows, fallbackText) {
   const labelRegex = /M\.?R\.?P\.?/i;
-  const valueRegex = /(?:Rs\.?|₹|INR)\s*(\d+(?:[.,]\d{1,2})?)/i;
+  // FIX: currency symbol is now optional — Tesseract very often fails to read
+  // ₹ correctly, which was causing MRP to be missed entirely even when the
+  // number was clearly printed right next to "MRP".
+  const valueRegex = /(?:Rs\.?|₹|INR)?\s*[:\-]?\s*([0-9oOlIsS]{1,6}(?:[.,][0-9oOlIsS]{1,2})?)\s*\/?-?/i;
 
   const inclusiveOfTaxes = /inclusive\s*of\s*(?:all\s*)?taxes|incl\.?\s*of\s*(?:all\s*)?tax/i.test(fallbackText);
 
   const match = findNearValue(rows, labelRegex, valueRegex);
   if (match) {
+    const amount = normalizeOcrDigits(match[1]);
     return {
       found: true,
-      value: `₹${match[1]}${inclusiveOfTaxes ? " (incl. of taxes)" : ""}`,
+      value: `₹${amount}${inclusiveOfTaxes ? " (incl. of taxes)" : ""}`,
       confidence: inclusiveOfTaxes ? "high" : "medium",
       rule: "Rule 6(1)(f)",
       warning: !inclusiveOfTaxes ? '"Inclusive of all taxes" wording not detected alongside MRP' : null,
@@ -176,12 +314,13 @@ function detectMRP(rows, fallbackText) {
   }
 
   const fallbackMatch = fallbackText.match(
-    /M\.?R\.?P\.?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*(\d+(?:[.,]\d{1,2})?)/i
+    /M\.?R\.?P\.?\s*[:\-]?\s*(?:Rs\.?|₹|INR)?\s*([0-9oOlIsS]{1,6}(?:[.,][0-9oOlIsS]{1,2})?)/i
   );
   if (fallbackMatch) {
+    const amount = normalizeOcrDigits(fallbackMatch[1]);
     return {
       found: true,
-      value: `₹${fallbackMatch[1]}${inclusiveOfTaxes ? " (incl. of taxes)" : ""}`,
+      value: `₹${amount}${inclusiveOfTaxes ? " (incl. of taxes)" : ""}`,
       confidence: inclusiveOfTaxes ? "high" : "medium",
       rule: "Rule 6(1)(f)",
       warning: !inclusiveOfTaxes ? '"Inclusive of all taxes" wording not detected alongside MRP' : null,

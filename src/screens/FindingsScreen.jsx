@@ -6,6 +6,7 @@ function buildFindingsFromRows(rows) {
     .filter((row) => !row.found || row.warning)
     .map((row, idx) => ({
       id: `f${idx + 1}`,
+      rowKey: row.key, // links this finding back to its declaration row for Report scoring
       severity:
         !row.found &&
         (row.key === "mfgDate" || row.key === "mrp" || row.key === "manufacturer")
