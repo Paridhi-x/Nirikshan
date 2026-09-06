@@ -18,6 +18,33 @@ function parseDisplayDate(str) {
   return new Date(Number(year), month, Number(day));
 }
 
+/* ---------- deterministic swatch colors (matches .sw-* palette in CSS) ---------- */
+const SWATCH_PALETTE = [
+  "#7f9c7a", // sage green
+  "#d1a24a", // gold
+  "#b7a98f", // tan
+  "#5f9a83", // teal
+  "#a68b64", // clay
+  "#6f8fa6", // slate blue
+  "#9c7fae", // muted purple
+  "#a67f6a", // terracotta
+];
+
+function hashString(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function getSwatchColor(row) {
+  if (row.swatchColor) return row.swatchColor;
+  const seed = row.inspectionId || row.productName || row.id || "x";
+  return SWATCH_PALETTE[hashString(seed) % SWATCH_PALETTE.length];
+}
+
 /* ---------- flat line icons (no emoji, always monochrome) ---------- */
 const IconScale = (p) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" width={p.size || 20} height={p.size || 20}>
@@ -292,7 +319,7 @@ export default function DashboardScreen({ onLogout, onNewInspection }) {
                       <tr key={row.id}>
                         <td>
                           <div className="prod-cell">
-                            <div className="swatch" style={{ backgroundColor: row.swatchColor || "#888" }}>
+                            <div className="swatch" style={{ backgroundColor: getSwatchColor(row) }}>
                               {row.swatch || row.productName?.slice(0, 2).toUpperCase()}
                             </div>
                             <div>
