@@ -6,17 +6,19 @@ function buildFindingsFromRows(rows) {
     .filter((row) => !row.found || row.warning)
     .map((row, idx) => ({
       id: `f${idx + 1}`,
-      severity: !row.found && (row.key === "mfgDate" || row.key === "mrp" || row.key === "manufacturer")
-        ? "critical"
-        : "review",
+      severity:
+        !row.found &&
+        (row.key === "mfgDate" || row.key === "mrp" || row.key === "manufacturer")
+          ? "critical"
+          : "review",
       title: !row.found
         ? `${row.label} not clearly declared`
         : `${row.label} — formatting issue`,
       evidenceStatus: !row.found ? "NOT DETECTED" : "DETECTED WITH WARNING",
       evidenceTitle: row.label,
       evidenceText: !row.found
-        ? `No clearly identifiable "${row.label.toLowerCase()}" information was detected in the uploaded product image via OCR.`
-        : row.warning || `"${row.label}" was detected but does not fully match the required format.`,
+        ? `No clearly identifiable “${row.label.toLowerCase()}” information was detected in the uploaded product image via OCR.`
+        : row.warning || `“${row.label}” was detected but does not fully match the required format.`,
       requirementNumber: row.rule || "RULE 6",
       requirementTitle: "Mandatory declaration",
       requirementText: row.requirement,
@@ -25,7 +27,14 @@ function buildFindingsFromRows(rows) {
     }));
 }
 
-function FindingsScreen({ declarationRows, onBack, onContinue }) {
+function FindingsScreen({
+  declarationRows,
+  onBack,
+  onContinue,
+  onSaveDraft,
+  inspectionId = "LMD-2026-0924",
+  appVersion = "v2.4",
+}) {
   const [findings, setFindings] = useState(() =>
     buildFindingsFromRows(declarationRows || [])
   );
@@ -71,236 +80,234 @@ function FindingsScreen({ declarationRows, onBack, onContinue }) {
     onContinue(findings, Date.now());
   };
 
+  const handleSaveDraft = () => {
+    if (onSaveDraft) onSaveDraft(findings);
+  };
+
+  const noteText = allReviewed
+    ? "All findings have been reviewed. Overrides are recorded in the official audit trail."
+    : `${pendingCount} finding${pendingCount > 1 ? "s" : ""} require${
+        pendingCount === 1 ? "s" : ""
+      } manual verification. Any override will be recorded in the official audit trail.`;
+
+  const Header = (
+    <header className="findings-header">
+      <div className="header-left">
+        <button className="back-link" onClick={onBack}>
+          <span className="back-arrow">←</span> Back to Analysis
+        </button>
+        <span className="header-divider">/</span>
+        <span className="inspection-id">
+          Inspection ID: <strong>{inspectionId}</strong>
+        </span>
+      </div>
+      <div className="header-right">
+        <span className="header-step">STEP 05 · INSPECTION FINDINGS</span>
+        <span className="header-version">NIRIKSHAN {appVersion}</span>
+      </div>
+    </header>
+  );
+
+  const Footer = (
+    <footer className="findings-footer">
+      Legal Metrology Division (LMD) Enforcement Portal · Government of India Standards
+      Verification
+    </footer>
+  );
+
   if (findings.length === 0) {
     return (
       <div className="findings-page">
-        <header className="findings-header">
-          <div className="findings-brand">
-            <div className="findings-brand-mark">N</div>
-            <div>
-              <div className="findings-brand-name">NIRIKSHAN</div>
-              <div className="findings-brand-subtitle">LEGAL METROLOGY</div>
-            </div>
-          </div>
-          <div className="findings-step">
-            <span>INSPECTION FINDINGS</span>
-            <strong>05 / 06</strong>
-          </div>
-        </header>
+        {Header}
 
         <main className="findings-main">
-          <section className="findings-heading">
-            <div className="findings-eyebrow">COMPLIANCE ASSESSMENT</div>
-            <h1>No violations found</h1>
-            <p>All mandatory declarations were detected successfully.</p>
-          </section>
+          <div className="findings-eyebrow">STEP 05 · INSPECTION FINDINGS</div>
+          <h1 className="findings-title">No violations found</h1>
+          <p className="findings-subtitle">
+            All mandatory declarations were detected successfully.
+          </p>
 
-          <div className="findings-actions">
-            <button className="findings-back-button" onClick={onBack}>
-              ← BACK TO REVIEW
+          <div className="findings-bottom-bar">
+            <button className="btn-text-link" onClick={onBack}>
+              ← Back to Analysis
             </button>
-
-            <button className="findings-continue-button" onClick={handleGenerateReport}>
-              GENERATE INSPECTION REPORT
-              <span>→</span>
-            </button>
+            <div className="findings-bottom-actions">
+              <button className="btn-primary-dark" onClick={handleGenerateReport}>
+                Complete Compliance Check <span>→</span>
+              </button>
+            </div>
           </div>
         </main>
+
+        {Footer}
       </div>
     );
   }
 
   return (
     <div className="findings-page">
-      <header className="findings-header">
-        <div className="findings-brand">
-          <div className="findings-brand-mark">N</div>
-          <div>
-            <div className="findings-brand-name">NIRIKSHAN</div>
-            <div className="findings-brand-subtitle">LEGAL METROLOGY</div>
-          </div>
-        </div>
-        <div className="findings-step">
-          <span>INSPECTION FINDINGS</span>
-          <strong>05 / 06</strong>
-        </div>
-      </header>
+      {Header}
 
       <main className="findings-main">
-        <section className="findings-heading">
-          <div className="findings-eyebrow">COMPLIANCE ASSESSMENT</div>
+        <div className="findings-eyebrow">STEP 05 · INSPECTION FINDINGS</div>
+        <h1 className="findings-title">Review findings</h1>
+        <p className="findings-subtitle">
+          NIRIKSHAN identified{" "}
+          <strong>
+            {findings.length} potential declaration issue{findings.length !== 1 ? "s" : ""}
+          </strong>{" "}
+          requiring inspector verification.
+        </p>
 
-          <div className="result-title-row">
-            <div>
-              <h1>Review findings</h1>
-              <p>
-                NIRIKSHAN identified {findings.length} potential declaration
-                issues requiring inspector verification.
-              </p>
-            </div>
-
-            <div className="result-badge">
-              <span className="result-badge-dot"></span>
-              {findings.length} FLAGGED
+        <section className="findings-table-card">
+          <div className="findings-table-header">
+            <span className="findings-table-title">EXTRACTED FINDINGS</span>
+            <div className="findings-chips">
+              <span className="chip chip-confirmed">
+                <i className="chip-dot" />
+                {confirmedCount} Confirmed
+              </span>
+              <span className="chip chip-pending">
+                <i className="chip-dot" />
+                {pendingCount} Needs Review
+              </span>
+              {dismissedCount > 0 && (
+                <span className="chip chip-dismissed">
+                  <i className="chip-dot" />
+                  {dismissedCount} Dismissed
+                </span>
+              )}
+              {pendingCount > 0 && (
+                <button className="btn-confirm-all" onClick={handleConfirmAll}>
+                  Confirm all
+                </button>
+              )}
             </div>
           </div>
-        </section>
 
-        <section className="result-summary">
-          <div className="result-summary-stats">
-            <div>
-              <span>TOTAL FINDINGS</span>
-              <strong>{findings.length}</strong>
-            </div>
-            <div>
-              <span>CONFIRMED</span>
-              <strong className="confirmed-number">{confirmedCount}</strong>
-            </div>
-            <div>
-              <span>DISMISSED</span>
-              <strong className="dismissed-number">{dismissedCount}</strong>
-            </div>
-            <div>
-              <span>PENDING</span>
-              <strong className="pending-number">{pendingCount}</strong>
-            </div>
+          <div className="findings-columns-header">
+            <span>FIELD</span>
+            <span>DETECTED INFORMATION</span>
+            <span>RULE</span>
+            <span>STATUS</span>
+            <span>ACTION</span>
           </div>
-        </section>
 
-        {pendingCount > 0 && (
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-            <button
-              onClick={handleConfirmAll}
-              style={{
-                border: "1px solid #2FA66B",
-                background: "transparent",
-                color: "#2FA66B",
-                padding: "9px 16px",
-                fontSize: "9px",
-                fontWeight: 700,
-                letterSpacing: "1px",
-                cursor: "pointer",
-              }}
-            >
-              CONFIRM ALL ({pendingCount})
-            </button>
-          </div>
-        )}
-
-        <section className="findings-list">
-          {findings.map((finding, index) => (
+          {findings.map((finding) => (
             <div
-              className={`finding-card severity-${finding.severity} status-${finding.status}`}
+              className={`findings-row status-${finding.status} severity-${finding.severity}`}
               key={finding.id}
             >
-              <div className="finding-card-header">
-                <div>
-                  <span className={`finding-label label-${finding.severity}`}>
-                    {String(index + 1).padStart(2, "0")} ·{" "}
-                    {finding.severity === "critical" ? "POTENTIAL VIOLATION" : "NEEDS REVIEW"}
-                  </span>
-                  <h2>{finding.title}</h2>
-                </div>
-
-                <div className={`finding-status-badge status-${finding.status}`}>
-                  {finding.status === "pending" && "PENDING"}
-                  {finding.status === "confirmed" && "✓ CONFIRMED"}
-                  {finding.status === "dismissed" && "✕ DISMISSED"}
-                </div>
+              <div className="row-cell row-field" data-label="Field">
+                <strong>{finding.evidenceTitle}</strong>
+                <span className={`severity-badge sev-${finding.severity}`}>
+                  {finding.severity === "critical" ? "Potential violation" : "Needs review"}
+                </span>
               </div>
 
-              <div className="finding-content">
-                <div className="finding-column">
-                  <div className="column-label">DETECTED INFORMATION</div>
-                  <div className="evidence-box">
-                    <span className="evidence-status">{finding.evidenceStatus}</span>
-                    <strong>{finding.evidenceTitle}</strong>
-
-                    {editingId === finding.id ? (
-                      <div className="edit-area">
-                        <textarea
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          rows={4}
-                        />
-                        <div className="edit-actions">
-                          <button className="edit-cancel" onClick={cancelEdit}>
-                            CANCEL
-                          </button>
-                          <button className="edit-save" onClick={() => saveEdit(finding.id)}>
-                            SAVE
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p>{finding.evidenceText}</p>
-                    )}
+              <div className="row-cell row-detected" data-label="Detected information">
+                {editingId === finding.id ? (
+                  <div className="edit-area">
+                    <textarea
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="edit-actions">
+                      <button className="edit-cancel" onClick={cancelEdit}>
+                        Cancel
+                      </button>
+                      <button className="edit-save" onClick={() => saveEdit(finding.id)}>
+                        Save
+                      </button>
+                    </div>
                   </div>
-                </div>
-
-                <div className="finding-column">
-                  <div className="column-label">APPLICABLE REQUIREMENT</div>
-                  <div className="requirement-box">
-                    <div className="requirement-number">{finding.requirementNumber}</div>
-                    <strong>{finding.requirementTitle}</strong>
-                    <p>{finding.requirementText}</p>
-                    <span className="rule-reference">{finding.ruleRef}</span>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <span
+                      className={`detected-badge ${
+                        finding.evidenceStatus === "NOT DETECTED" ? "badge-missing" : "badge-warning"
+                      }`}
+                    >
+                      {finding.evidenceStatus}
+                    </span>
+                    <p className="detected-text">{finding.evidenceText}</p>
+                  </>
+                )}
               </div>
 
-              <div className="finding-actions">
-                <button
-                  className="finding-confirm"
-                  disabled={finding.status === "confirmed"}
-                  onClick={() => handleConfirm(finding.id)}
-                >
-                  CONFIRM FINDING
-                </button>
-                <button
-                  className="finding-dismiss"
-                  disabled={finding.status === "dismissed"}
-                  onClick={() => handleDismiss(finding.id)}
-                >
-                  DISMISS FINDING
-                </button>
-                <button className="finding-edit" onClick={() => startEdit(finding)}>
-                  EDIT FINDING
-                </button>
+              <div className="row-cell row-rule" data-label="Rule">
+                <span className="rule-badge">{finding.requirementNumber}</span>
+                <p className="rule-text">{finding.requirementText}</p>
+              </div>
+
+              <div className="row-cell row-status" data-label="Status">
+                {finding.status === "pending" && (
+                  <span className="status-badge status-pending">Needs Review</span>
+                )}
+                {finding.status === "confirmed" && (
+                  <span className="status-badge status-confirmed">Confirmed</span>
+                )}
+                {finding.status === "dismissed" && (
+                  <span className="status-badge status-dismissed">Dismissed</span>
+                )}
+              </div>
+
+              <div className="row-cell row-action" data-label="Action">
+                {editingId === finding.id ? null : (
+                  <div className="action-links">
+                    <button
+                      className="action-link action-confirm"
+                      disabled={finding.status === "confirmed"}
+                      onClick={() => handleConfirm(finding.id)}
+                    >
+                      Confirm
+                    </button>
+                    <span className="action-sep">·</span>
+                    <button
+                      className="action-link action-dismiss"
+                      disabled={finding.status === "dismissed"}
+                      onClick={() => handleDismiss(finding.id)}
+                    >
+                      Dismiss
+                    </button>
+                    <span className="action-sep">·</span>
+                    <button className="action-link action-edit" onClick={() => startEdit(finding)}>
+                      Edit
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
         </section>
 
-        <div className="findings-actions">
-          <button className="findings-back-button" onClick={onBack}>
-            ← BACK TO REVIEW
+        <p className="findings-note">
+          <span className="note-icon">ⓘ</span>
+          {noteText}
+        </p>
+
+        <div className="findings-bottom-bar">
+          <button className="btn-text-link" onClick={onBack}>
+            ← Back to Analysis
           </button>
-
-          <div className="findings-continue-wrap">
-            {!allReviewed && (
-              <span className="continue-hint">
-                {pendingCount} finding{pendingCount > 1 ? "s" : ""} still need review
-              </span>
-            )}
-
+          <div className="findings-bottom-actions">
+            <button className="btn-outline" onClick={handleSaveDraft}>
+              Save Draft
+            </button>
             <button
-              className="findings-continue-button"
+              className="btn-primary-dark"
               disabled={!allReviewed}
               onClick={handleGenerateReport}
             >
-              GENERATE INSPECTION REPORT
-              <span>→</span>
+              Complete Compliance Check <span>→</span>
             </button>
           </div>
         </div>
       </main>
 
-      <footer className="findings-footer">
-        <span>DEPARTMENT OF CONSUMER AFFAIRS</span>
-        <span>LEGAL METROLOGY · INSPECTION FINDINGS</span>
-        <span>NIRIKSHAN · v1.0</span>
-      </footer>
+      {Footer}
     </div>
   );
 }

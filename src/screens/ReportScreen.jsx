@@ -4,25 +4,30 @@ import { generateReportPdf } from "../utils/generateReportPdf";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, Timestamp } from "firebase/firestore";
 
-function computeOverallStatus(confirmedFindings, isExemptCase) {
+const CONFIDENCE_SCORE_MAP = { high: 95, medium: 78, manual: 100, low: 55, none: 0 };
+
+function computeOverallStatus(rows, isExemptCase) {
   if (isExemptCase) {
-    return { label: "EXEMPT — NO DECLARATIONS REQUIRED", color: "#7a6c90" };
+    return { label: "EXEMPT", color: "#7a6c90", bg: "#eee9df" };
   }
-  if (confirmedFindings.length === 0) {
-    return { label: "COMPLIANT", color: "#2fa66b" };
+  const notFound = rows.filter((r) => !r.found);
+  if (notFound.length === 0) {
+    return { label: "LIKELY COMPLIANT", color: "#2fa66b", bg: "#e7f5ee" };
   }
-  const hasCritical = confirmedFindings.some((f) => f.severity === "critical");
-  if (hasCritical) {
-    return { label: "NON-COMPLIANT", color: "#e14b3a" };
+  const criticalMissing = notFound.some((r) =>
+    ["mrp", "mfgDate", "manufacturer"].includes(r.key)
+  );
+  if (criticalMissing) {
+    return { label: "NON-COMPLIANT", color: "#e14b3a", bg: "#fbeae7" };
   }
-  return { label: "FLAGGED FOR REVIEW", color: "#e14b3a" };
+  return { label: "REVIEW REQUIRED", color: "#e8a23d", bg: "#fbf1e3" };
 }
 
 function formatDateTime(ms) {
   if (!ms) return null;
   const d = new Date(ms);
   return {
-    date: d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }),
+    date: d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }),
     time: d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
   };
 }
@@ -32,15 +37,16 @@ function ReportScreen({
   productInfo,
   declarationRows,
   findings,
+  officerName,
   ocrCompletedAt,
   findingsReviewedAt,
   onBack,
   onDashboard,
 }) {
-  const [reportPreparedAt] = useState(() => Date.now());
   const [isDownloading, setIsDownloading] = useState(false);
   const [isFinalizing, setIsFinalizing] = useState(false);
   const [isFinalized, setIsFinalized] = useState(false);
+  const [markedForReview, setMarkedForReview] = useState(true);
 
   const rows = declarationRows || [];
   const allFindings = findings || [];
@@ -49,13 +55,23 @@ function ReportScreen({
 
   const totalFields = rows.length;
   const validCount = rows.filter((r) => r.found).length;
-  const reviewCount = totalFields - validCount;
+  const notFoundRows = rows.filter((r) => !r.found);
   const score = totalFields ? Math.round((validCount / totalFields) * 100) : 0;
 
+  const overallStatus = computeOverallStatus(rows, isExemptCase);
   const confirmedFindings = allFindings.filter((f) => f.status === "confirmed");
-  const overallStatus = computeOverallStatus(confirmedFindings, isExemptCase);
 
-  const netQtyRow = rows.find((r) => r.key === "netQuantity");
+  const imagesAnalyzed = ["front", "back", "label", "mrp"].filter(
+    (k) => images?.[k]?.file
+  ).length;
+
+  const avgConfidence = totalFields
+    ? Math.round(
+        rows.reduce((sum, r) => sum + (CONFIDENCE_SCORE_MAP[r.confidence] || 0), 0) /
+          totalFields
+      )
+    : 0;
+
   const previewUrl =
     images?.label?.previewUrl ||
     images?.front?.previewUrl ||
@@ -65,28 +81,16 @@ function ReportScreen({
   const reportDate = product.inspectionDate
     ? new Date(product.inspectionDate).toLocaleDateString("en-GB", {
         day: "2-digit",
-        month: "long",
+        month: "short",
         year: "numeric",
       })
-    : new Date().toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      });
+    : new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
   const now = new Date();
   const inspectionId = `INSP-26034-${String(now.getTime()).slice(-6)}`;
 
   const ocrTime = formatDateTime(ocrCompletedAt);
   const reviewTime = formatDateTime(findingsReviewedAt);
-  const preparedTime = formatDateTime(reportPreparedAt);
-
-  const initials = (product.productName || "PR")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 
   const handleDownloadPdf = async () => {
     setIsDownloading(true);
@@ -132,14 +136,14 @@ function ReportScreen({
         validCount: isExemptCase ? null : validCount,
         totalFields: isExemptCase ? null : totalFields,
         declarationRows: rows,
-        confirmedFindings: confirmedFindings,
+        confirmedFindings,
         reportDate,
+        officerName: officerName || "Unnamed Officer",
+        markedForReview,
         ocrCompletedAt: ocrCompletedAt || null,
         findingsReviewedAt: findingsReviewedAt || null,
-        reportPreparedAt,
         createdAt: Timestamp.now(),
       });
-
       setIsFinalized(true);
       alert("Report finalized and saved successfully.");
     } catch (err) {
@@ -150,309 +154,267 @@ function ReportScreen({
     }
   };
 
-  return (
-    <div className="report-screen">
-      <header className="report-header">
-        <div className="brand-block">
-          <div className="brand-name">NIRIKSHAN</div>
-          <div className="brand-subtitle">LEGAL METROLOGY</div>
+  if (isExemptCase) {
+    return (
+      <div className="rpt-page">
+        <div className="rpt-topbar">
+          <button className="rpt-back-link" onClick={onBack}>← Back to Analysis</button>
         </div>
-
-        <div className="report-step">
-          <span>INSPECTION REPORT</span>
-          <strong>06 / 06</strong>
-        </div>
-      </header>
-
-      <main className="report-content">
-        <section className="report-intro">
+        <div className="rpt-header">
           <div>
-            <p className="report-eyebrow">COMPLIANCE RECORD</p>
-            <h1>Inspection report</h1>
-            <p className="report-description">
-              Review the completed inspection record, compliance findings and
-              corrective action before finalizing the report.
-            </p>
+            <p className="rpt-eyebrow">COMPLIANCE RECORD · FINAL AUDIT</p>
+            <h1>Inspection Report</h1>
+            <p className="rpt-description">This product is exempt from Rule 6 mandatory declarations.</p>
           </div>
+          <div className="rpt-status-pill" style={{ color: overallStatus.color, background: overallStatus.bg }}>
+            EXEMPT
+          </div>
+        </div>
+        <div className="rpt-card" style={{ padding: "28px" }}>
+          <p>
+            This package falls under an exempt category under Rule 3 / Rule 26 of the
+            Legal Metrology (Packaged Commodities) Rules, 2011. No mandatory
+            declaration checks apply, and no compliance findings were generated.
+          </p>
+        </div>
+        <div className="rpt-bottombar">
+          <button className="rpt-back-link" onClick={onBack}>← Return to Analysis</button>
+          <button className="rpt-finalize-btn" onClick={onDashboard}>Return to Dashboard →</button>
+        </div>
+      </div>
+    );
+  }
 
-          <div className="report-status" style={{ borderColor: overallStatus.color, color: overallStatus.color }}>
-            <span className="status-dot" style={{ background: overallStatus.color }}></span>
+  return (
+    <div className="rpt-page">
+
+      <div className="rpt-topbar">
+        <button className="rpt-back-link" onClick={onBack}>← Back to Analysis</button>
+      </div>
+
+      <div className="rpt-header">
+        <div>
+          <p className="rpt-eyebrow">COMPLIANCE RECORD · FINAL AUDIT &nbsp;•&nbsp; FORM LMR-01 (SCHEDULE IV)</p>
+          <h1>Inspection Report</h1>
+          <p className="rpt-description">
+            Review the completed inspection record, compliance findings, and
+            declaration status before finalizing the legal record.
+          </p>
+        </div>
+        <div className="rpt-header-right">
+          <div className="rpt-status-pill" style={{ color: overallStatus.color, background: overallStatus.bg }}>
+            {overallStatus.label === "LIKELY COMPLIANT" ? "✓ " : "⚠ "}
             {overallStatus.label}
           </div>
-        </section>
+          <span className="rpt-stage-label">Stage 06 / 06 · Final Submission</span>
+        </div>
+      </div>
 
-        <section className="report-grid">
-          <div className="report-card summary-card">
-            <div className="card-heading">
-              <span>01</span>
-              <h2>INSPECTION SUMMARY</h2>
-            </div>
-
-            <div className="summary-product">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt={product.productName || "Inspected product"}
-                  className="product-mark"
-                  style={{ objectFit: "cover" }}
-                />
-              ) : (
-                <div className="product-mark">{initials}</div>
-              )}
-              <div>
-                <h3>{product.productName || "Unnamed Product"}</h3>
-                <p>
-                  {product.category || "Packaged Commodity"}
-                  {product.manufacturer ? ` · ${product.manufacturer}` : ""}
-                </p>
-              </div>
-            </div>
-
-            <div className="details-grid">
+      {/* Summary bar */}
+      <div className="rpt-card rpt-summary-bar">
+        <div className="rpt-summary-left">
+          <div className="rpt-product-icon">📦</div>
+          <div>
+            <div className="rpt-code-badge">{product.category || "PACKAGED COMMODITY"}</div>
+            <div className="rpt-sample-id">Sample ID: #{inspectionId}</div>
+            <h2 className="rpt-product-name">{product.productName || "Unnamed Product"}</h2>
+            <div className="rpt-meta-row">
               <div>
                 <span>INSPECTION ID</span>
                 <strong>{inspectionId}</strong>
               </div>
-
               <div>
                 <span>INSPECTION DATE</span>
                 <strong>{reportDate}</strong>
               </div>
-
               <div>
-                <span>NET QUANTITY</span>
-                <strong>{netQtyRow?.value || "Not detected"}</strong>
-              </div>
-
-              <div>
-                <span>DECLARATIONS CHECKED</span>
-                <strong>{isExemptCase ? "N/A" : String(totalFields).padStart(2, "0")}</strong>
+                <span>INSPECTING OFFICER</span>
+                <strong>{officerName || "Unnamed Officer"}</strong>
               </div>
             </div>
-          </div>
-
-          <div className="report-card score-card">
-            <div className="card-heading">
-              <span>02</span>
-              <h2>COMPLIANCE SCORE</h2>
-            </div>
-
-            {isExemptCase ? (
-              <>
-                <div className="score-display">
-                  <strong style={{ fontSize: 32 }}>N/A</strong>
-                  <span>Exempt category — no declarations required</span>
-                </div>
-
-                <div className="score-bar">
-                  <div className="score-fill" style={{ width: "100%", background: "#7a6c90" }}></div>
-                </div>
-
-                <div className="score-meta">
-                  <span style={{ color: "#7a6c90" }}>EXEMPT UNDER RULE 3 / 26</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="score-display">
-                  <strong>{score}%</strong>
-                  <span>{validCount} of {totalFields} declarations clear</span>
-                </div>
-
-                <div className="score-bar">
-                  <div
-                    className="score-fill"
-                    style={{
-                      width: `${score}%`,
-                      background: score >= 80 ? "#2fa66b" : score >= 50 ? "#e8c24a" : "#e14b3a",
-                    }}
-                  ></div>
-                </div>
-
-                <div className="score-meta">
-                  <span className="valid-text">{String(validCount).padStart(2, "0")} VALID</span>
-                  <span className="review-text">{String(reviewCount).padStart(2, "0")} REVIEW</span>
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        <section className="report-card findings-card">
-          <div className="card-heading">
-            <span>03</span>
-            <h2>COMPLIANCE FINDINGS</h2>
-          </div>
-
-          {isExemptCase ? (
-            <div className="finding-row">
-              <div className="finding-number">—</div>
-              <div className="finding-main">
-                <p>
-                  This product is exempt from mandatory Rule 6 declarations
-                  under Rule 3 / Rule 26 of the Legal Metrology (Packaged
-                  Commodities) Rules, 2011. No compliance findings apply.
-                </p>
-              </div>
-            </div>
-          ) : confirmedFindings.length === 0 ? (
-            <div className="finding-row">
-              <div className="finding-number">—</div>
-              <div className="finding-main">
-                <p>No findings were confirmed by the inspector for this inspection.</p>
-              </div>
-            </div>
-          ) : (
-            confirmedFindings.map((finding, idx) => (
-              <div className="finding-row" key={finding.id}>
-                <div className="finding-number">{String(idx + 1).padStart(2, "0")}</div>
-
-                <div className="finding-main">
-                  <div className="finding-title-row">
-                    <h3>{finding.title}</h3>
-                    <span
-                      className="review-badge"
-                      style={{
-                        borderColor: finding.severity === "critical" ? "#e14b3a" : "#e8c24a",
-                        color: finding.severity === "critical" ? "#e14b3a" : "#e8c24a",
-                      }}
-                    >
-                      {finding.severity === "critical" ? "VIOLATION" : "REVIEW"}
-                    </span>
-                  </div>
-
-                  <p>{finding.evidenceText}</p>
-
-                  <div className="finding-details">
-                    <div>
-                      <span>DETECTED INFORMATION</span>
-                      <strong>{finding.evidenceStatus}</strong>
-                    </div>
-
-                    <div>
-                      <span>REQUIREMENT</span>
-                      <strong>{finding.requirementText}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </section>
-
-        <section className="report-grid lower-grid">
-          <div className="report-card action-card">
-            <div className="card-heading">
-              <span>04</span>
-              <h2>CORRECTIVE ACTION</h2>
-            </div>
-
-            <div className="action-content">
-              <div className="action-icon">!</div>
-
-              <div>
-                <h3>
-                  {isExemptCase
-                    ? "No action required"
-                    : confirmedFindings.length > 0
-                    ? "Manual verification required"
-                    : "No action required"}
-                </h3>
-                <p>
-                  {isExemptCase
-                    ? "This product falls under an exempt category and is not subject to Rule 6 mandatory declarations."
-                    : confirmedFindings.length > 0
-                    ? "Verify the flagged declarations on the physical package and record the final compliance decision."
-                    : "All checked declarations were found compliant. No corrective action is needed at this time."}
-                </p>
-              </div>
-            </div>
-
-            <div className="assignment">
-              <span>RESPONSIBLE OFFICER</span>
-              <strong>Compliance Review Officer</strong>
-            </div>
-          </div>
-
-          <div className="report-card audit-card">
-            <div className="card-heading">
-              <span>05</span>
-              <h2>AUDIT TRAIL</h2>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line"></div>
-              <div>
-                <strong>AI analysis completed (OCR)</strong>
-                <span>
-                  {ocrTime ? `${ocrTime.date} · ${ocrTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line"></div>
-              <div>
-                <strong>Findings reviewed by inspector</strong>
-                <span>
-                  {reviewTime ? `${reviewTime.date} · ${reviewTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line last"></div>
-              <div>
-                <strong>Report prepared</strong>
-                <span>
-                  {preparedTime ? `${preparedTime.date} · ${preparedTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="report-note">
-          <div className="note-label">AI ASSISTED RECORD</div>
-          <p>
-            This report is generated from image analysis, OCR extraction and
-            rule-based compliance verification. Final enforcement decisions
-            remain subject to authorized inspector review.
-          </p>
-        </section>
-
-        <div className="report-actions">
-          <button className="back-button" onClick={onBack}>
-            ← BACK TO FINDINGS
-          </button>
-
-          <div className="action-buttons">
-            <button
-              className="save-button"
-              onClick={handleDownloadPdf}
-              disabled={isDownloading}
-            >
-              {isDownloading ? "GENERATING..." : "DOWNLOAD PDF"}
-            </button>
-
-            <button
-              className="finalize-button"
-              onClick={handleFinalizeReport}
-              disabled={isFinalizing || isFinalized}
-            >
-              {isFinalized
-                ? "REPORT FINALIZED ✓"
-                : isFinalizing
-                ? "SAVING..."
-                : "FINALIZE REPORT →"}
-            </button>
           </div>
         </div>
 
-        <button className="dashboard-link" onClick={onDashboard}>
-          RETURN TO DASHBOARD
-        </button>
-      </main>
+        <div className="rpt-summary-divider" />
+
+        <div className="rpt-summary-right">
+          <span className="rpt-score-label">COMPLIANCE SCORE</span>
+          <div className="rpt-score-row">
+            <span className="rpt-score-number">{score}</span>
+            <span className="rpt-score-max">/100</span>
+            <div
+              className="rpt-compliant-pill"
+              style={{ color: overallStatus.color, background: overallStatus.bg }}
+            >
+              {overallStatus.label}
+            </div>
+          </div>
+          <span className="rpt-score-sub">{validCount} of {totalFields} declarations clear</span>
+          <div className="rpt-score-bar">
+            <div
+              className="rpt-score-fill"
+              style={{ width: `${score}%`, background: overallStatus.color }}
+            />
+          </div>
+          <p className="rpt-score-note">
+            System-generated statutory assessment under Legal Metrology (Packaged Commodities) Rules, 2011.
+          </p>
+        </div>
+      </div>
+
+      <div className="rpt-two-col">
+
+        {/* Compliance Findings */}
+        <div className="rpt-card rpt-findings-card">
+          <div className="rpt-card-header">
+            <div>
+              <h3>Compliance Findings</h3>
+              <p>Verification of mandatory declarations under Rule 6 of PCR, 2011</p>
+            </div>
+            <span className="rpt-tag">{totalFields} FIELDS EXAMINED</span>
+          </div>
+
+          {rows.map((row) => (
+            <div className="rpt-finding-row" key={row.key}>
+              <div>
+                <span className="rpt-finding-label">
+                  {row.label}
+                  <span className="rpt-finding-rule">{row.rule}</span>
+                </span>
+                <div className={`rpt-finding-value ${!row.found ? "muted" : ""}`}>
+                  {row.value || `Not detected${row.value === null ? "" : ""}`}
+                  {!row.found && (
+                    <span className="rpt-finding-subnote">Not detected in uploaded specimen</span>
+                  )}
+                </div>
+              </div>
+              <div className={`rpt-pill ${row.found ? "green" : "amber"}`}>
+                {row.found ? "✓ Detected" : "⚠ Not Detected"}
+              </div>
+            </div>
+          ))}
+
+          {notFoundRows.length > 0 && (
+            <div className="rpt-warning-box">
+              <div className="rpt-warning-icon">⚠</div>
+              <div>
+                <strong>
+                  Potential Non-Compliance:{" "}
+                  {notFoundRows.map((r) => r.label).join(", ")}
+                </strong>
+                <p>
+                  {notFoundRows.length === 1
+                    ? `${notFoundRows[0].label} declaration was not detected on the uploaded specimen.`
+                    : "The above declarations were not detected on the uploaded specimen."}
+                </p>
+                <p className="rpt-citation">
+                  <strong>Statutory Reference:</strong>{" "}
+                  {notFoundRows.map((r) => r.rule).join(", ")} — Requires
+                  inspecting officer manual verification or supplementary
+                  photographic evidence before final sign-off.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right column */}
+        <div className="rpt-right-col">
+          <div className="rpt-card">
+            <div className="rpt-card-header">
+              <h3>Inspection Evidence</h3>
+              <span className="rpt-tag">SPECIMEN VIEW</span>
+            </div>
+
+            <div className="rpt-evidence-image-wrap">
+              {previewUrl ? (
+                <img src={previewUrl} alt="Specimen" className="rpt-evidence-image" />
+              ) : (
+                <div className="rpt-evidence-placeholder">No image available</div>
+              )}
+              <div className="rpt-evidence-caption">
+                <span>Specimen #{inspectionId}</span>
+                <span>Product Photograph</span>
+              </div>
+            </div>
+
+            <div className="rpt-evidence-meta">
+              <div>
+                <span>OCR Extraction Confidence</span>
+                <strong>{avgConfidence}% (Client-side)</strong>
+              </div>
+              <div>
+                <span>Images Analyzed</span>
+                <strong>{imagesAnalyzed} of 4 uploaded views</strong>
+              </div>
+              <div>
+                <span>OCR Engine</span>
+                <strong>Tesseract.js (client-side)</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="rpt-card rpt-directive-card">
+            <div className="rpt-directive-header">
+              <span className="rpt-directive-check">✓</span>
+              <h3>Inspector Action Directive</h3>
+            </div>
+            <p>
+              {notFoundRows.length > 0
+                ? `Verify whether the mandatory declaration(s) for ${notFoundRows
+                    .map((r) => r.label)
+                    .join(", ")} are affixed elsewhere on the package, or request
+                  supplementary photographic evidence before final sign-off.`
+                : "All mandatory declarations were detected. No further verification action is required."}
+            </p>
+
+            <div className="rpt-directive-status">
+              <span>STATUS DETERMINATION</span>
+              <label className="rpt-checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={markedForReview}
+                  onChange={(e) => setMarkedForReview(e.target.checked)}
+                />
+                Mark for Secondary Review
+              </label>
+            </div>
+
+            <p className="rpt-directive-footnote">
+              This report is generated from image analysis, OCR extraction and
+              rule-based compliance verification. Final enforcement decisions
+              remain subject to authorized inspector review.
+              {ocrTime && ` OCR completed ${ocrTime.date}, ${ocrTime.time}.`}
+              {reviewTime && ` Findings reviewed ${reviewTime.date}, ${reviewTime.time}.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rpt-bottombar">
+        <button className="rpt-back-link" onClick={onBack}>← Return to Analysis</button>
+
+        <span className="rpt-standard-badge">
+          🛡 LEGAL METROLOGY (PACKAGED COMMODITIES) RULES, 2011
+        </span>
+
+        <div className="rpt-bottom-actions">
+          <button className="rpt-download-btn" onClick={handleDownloadPdf} disabled={isDownloading}>
+            {isDownloading ? "Generating..." : "⬇ Download PDF"}
+          </button>
+          <button
+            className="rpt-finalize-btn"
+            onClick={handleFinalizeReport}
+            disabled={isFinalizing || isFinalized}
+          >
+            {isFinalized ? "Report Finalized ✓" : isFinalizing ? "Saving..." : "Finalize Report →"}
+          </button>
+        </div>
+      </div>
+
+      <button className="rpt-dashboard-link" onClick={onDashboard}>
+        RETURN TO DASHBOARD
+      </button>
     </div>
   );
 }

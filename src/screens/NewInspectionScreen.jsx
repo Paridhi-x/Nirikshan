@@ -6,7 +6,7 @@ function NewInspectionScreen({ onBack, onContinue }) {
   const [manufacturer, setManufacturer] = useState("");
   const [category, setCategory] = useState("");
   const [inspectionType, setInspectionType] = useState("");
-  const [inspectionDate, setInspectionDate] = useState("2026-09-05");
+  const [inspectionDate, setInspectionDate] = useState("2026-09-06");
   const [isImported, setIsImported] = useState(false);
   const [isExempt, setIsExempt] = useState(false);
 
@@ -22,339 +22,197 @@ function NewInspectionScreen({ onBack, onContinue }) {
     });
   };
 
+  const formattedDate = inspectionDate
+    ? new Date(inspectionDate).toLocaleDateString("en-GB", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+      }).split("/").join("-")
+    : "";
+
   return (
-    <div className="new-inspection-page">
+    <div className="nis-page">
 
-      {/* Header */}
-      <header className="new-inspection-header">
+      <div className="nis-topbar">
+        <button className="nis-back-link" onClick={onBack}>← Back to Dashboard</button>
+      </div>
 
-        <div className="new-inspection-brand">
-          <div className="new-inspection-brand-mark">N</div>
-
-          <div>
-            <div className="new-inspection-brand-name">
-              NIRIKSHAN
-            </div>
-
-            <div className="new-inspection-brand-subtitle">
-              LEGAL METROLOGY
-            </div>
-          </div>
+      <div className="nis-header">
+        <div>
+          <p className="nis-eyebrow"><span className="nis-eyebrow-dot" /> INSPECTION INITIATION</p>
+          <h1>Create an Inspection</h1>
+          <p className="nis-description">
+            Enter the basic details of the packaged commodity before beginning the inspection.
+          </p>
         </div>
 
-        <div className="inspection-progress">
-          <span>NEW INSPECTION</span>
-          <strong>01 / 06</strong>
+        <div className="nis-steps">
+          <span className="nis-step active">01 Details</span>
+          <span className="nis-step-arrow">→</span>
+          <span className="nis-step">02 Product Scan</span>
+          <span className="nis-step-arrow">→</span>
+          <span className="nis-step">03 Verification</span>
         </div>
+      </div>
 
-      </header>
+      <div className="nis-card">
 
-
-      {/* Main */}
-      <main className="new-inspection-main">
-
-        <section className="new-inspection-intro">
-
-          <div className="new-inspection-eyebrow">
-            INSPECTION INITIATION
-          </div>
-
-          <h1>
-            Create an inspection
-          </h1>
-
-        </section>
-
-
-        {/* Inspection details */}
-        <section className="inspection-form">
-
-          <div className="form-section-heading">
-
-            <span>01</span>
-
+        <div className="nis-section">
+          <div className="nis-section-heading">
+            <span className="nis-section-num">01</span>
             <div>
-              <h2>Inspection details</h2>
-
-              <p>
-                Enter the information available at the time of inspection.
-              </p>
+              <h2>Inspection Details</h2>
+              <p>Enter the information available at the time of inspection.</p>
             </div>
-
           </div>
 
-
-          <div className="form-grid">
-
-            {/* Inspection ID */}
-            <div className="inspection-field">
-
+          <div className="nis-grid">
+            <div className="nis-field">
               <label>
                 INSPECTION ID
+                <span className="nis-badge">AUTO GENERATED</span>
               </label>
-
-              <div className="field-readonly">
-                LM / 02482
-
-                <span>
-                  AUTO GENERATED
-                </span>
-              </div>
-
+              <div className="nis-input readonly">LM / 02482</div>
             </div>
 
-
-            {/* Inspection Date */}
-            <div className="inspection-field">
-
+            <div className="nis-field">
               <label>
                 INSPECTION DATE
+                <span className="nis-hint">DD-MM-YYYY</span>
               </label>
-
-              <input
-                type="date"
-                value={inspectionDate}
-                onChange={(e) => setInspectionDate(e.target.value)}
-              />
-
+              <div className="nis-date-wrap">
+                <input
+                  type="date"
+                  value={inspectionDate}
+                  onChange={(e) => setInspectionDate(e.target.value)}
+                  className="nis-date-native"
+                />
+                <div className="nis-input date-display">
+                  {formattedDate}
+                  <span className="nis-cal-icon">📅</span>
+                </div>
+              </div>
             </div>
 
-
-            {/* Product Category */}
-            <div className="inspection-field">
-
-              <label>
-                PRODUCT CATEGORY
-              </label>
-
+            <div className="nis-field">
+              <label>PRODUCT CATEGORY <span className="nis-required">*</span></label>
               <select
+                className="nis-input select"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
               >
-
-                <option value="" disabled>
-                  Select product category
-                </option>
-
-                <option>
-                  Packaged Food
-                </option>
-
-                <option>
-                  Personal Care
-                </option>
-
-                <option>
-                  Household Goods
-                </option>
-
-                <option>
-                  Beverages
-                </option>
-
-                <option>
-                  Other Packaged Commodity
-                </option>
-
+                <option value="">Select product category</option>
+                <option>Packaged Food</option>
+                <option>Personal Care</option>
+                <option>Household Goods</option>
+                <option>Beverages</option>
+                <option>Other Packaged Commodity</option>
               </select>
-
             </div>
 
-
-            {/* Inspection Type */}
-            <div className="inspection-field">
-
-              <label>
-                INSPECTION TYPE
-              </label>
-
+            <div className="nis-field">
+              <label>INSPECTION TYPE <span className="nis-required">*</span></label>
               <select
+                className="nis-input select"
                 value={inspectionType}
                 onChange={(e) => setInspectionType(e.target.value)}
               >
-
-                <option value="" disabled>
-                  Select inspection type
-                </option>
-
-                <option>
-                  Routine Inspection
-                </option>
-
-                <option>
-                  Market Surveillance
-                </option>
-
-                <option>
-                  Complaint Based
-                </option>
-
-                <option>
-                  Follow-up Inspection
-                </option>
-
+                <option value="">Select inspection type</option>
+                <option>Routine Inspection</option>
+                <option>Market Surveillance</option>
+                <option>Complaint Based</option>
+                <option>Follow-up Inspection</option>
               </select>
-
             </div>
+          </div>
+        </div>
 
+        <div className="nis-section">
+          <div className="nis-section-heading">
+            <span className="nis-section-num">02</span>
+            <div>
+              <h2>Product Information</h2>
+              <p>Add known product details. Additional information can be extracted during product scanning.</p>
+            </div>
           </div>
 
-
-          {/* Product information */}
-          <div className="optional-section">
-
-            <div className="form-section-heading">
-
-              <span>02</span>
-
-              <div>
-
-                <h2>
-                  Product information
-                </h2>
-
-                <p>
-                  Add details if they are already known. These can also be
-                  extracted later from the product images.
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div className="form-grid product-grid">
-
-              <div className="inspection-field">
-
-                <label>
-                  PRODUCT / BRAND NAME
-                </label>
-
+          <div className="nis-grid">
+            <div className="nis-field">
+              <label>PRODUCT / BRAND NAME</label>
+              <div className="nis-input-icon-wrap">
+                <span className="nis-input-icon">📦</span>
                 <input
                   type="text"
-                  placeholder="Enter product or brand name"
+                  className="nis-input with-icon"
+                  placeholder="e.g., Annapurna Superfine Basmati Rice"
                   value={productName}
                   onChange={(e) => setProductName(e.target.value)}
                 />
-
               </div>
+            </div>
 
-
-              <div className="inspection-field">
-
-                <label>
-                  MANUFACTURER / PACKER
-                </label>
-
+            <div className="nis-field">
+              <label>MANUFACTURER / PACKER / IMPORTER</label>
+              <div className="nis-input-icon-wrap">
+                <span className="nis-input-icon">🏢</span>
                 <input
                   type="text"
-                  placeholder="Enter manufacturer or packer"
+                  className="nis-input with-icon"
+                  placeholder="e.g., Bharat Agro Products Pvt. Ltd., Okhla Phase III"
                   value={manufacturer}
                   onChange={(e) => setManufacturer(e.target.value)}
                 />
-
               </div>
-
             </div>
+          </div>
+        </div>
 
+        <div className="nis-section">
+          <div className="nis-section-heading">
+            <span className="nis-section-num">03</span>
+            <div>
+              <h2>Regulatory Applicability</h2>
+              <p>Select conditions that affect the applicable Legal Metrology checks.</p>
+            </div>
           </div>
 
-
-          {/* Regulatory applicability */}
-          <div className="optional-section">
-
-            <div className="form-section-heading">
-
-              <span>03</span>
-
-              <div>
-
-                <h2>
-                  Regulatory applicability
-                </h2>
-
-                <p>
-                  These affect which Rule 6 declarations are legally
-                  required for this package.
-                </p>
-
-              </div>
-
+          <label className="nis-check-card">
+            <input
+              type="checkbox"
+              checked={isImported}
+              onChange={(e) => setIsImported(e.target.checked)}
+            />
+            <div className="nis-check-text">
+              <strong>Imported Product</strong>
+              <span>Country of Origin declaration required.</span>
             </div>
+            <span className="nis-tag">Rule 6</span>
+          </label>
 
-            <div style={{ padding: "22px 28px", display: "flex", flexDirection: "column", gap: "16px" }}>
-
-              <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "#F4EEDD", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={isImported}
-                  onChange={(e) => setIsImported(e.target.checked)}
-                />
-                Imported product (Country of Origin declaration required — Rule 6)
-              </label>
-
-              <label style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "12px", color: "#F4EEDD", cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  checked={isExempt}
-                  onChange={(e) => setIsExempt(e.target.checked)}
-                />
-                Exempt category (e.g. under 10g/10ml, institutional pack, agricultural produce &gt;50kg — Rule 3/26)
-              </label>
-
+          <label className="nis-check-card">
+            <input
+              type="checkbox"
+              checked={isExempt}
+              onChange={(e) => setIsExempt(e.target.checked)}
+            />
+            <div className="nis-check-text">
+              <strong>Exempt Category</strong>
+              <span>Applicable exemption under the relevant rule.</span>
             </div>
+            <span className="nis-tag amber">Rule 3 &amp; Rule 26 Exemption</span>
+          </label>
 
-          </div>
+          <p className="nis-footnote">
+            Legal Metrology (Packaged Commodities) Rules, 2011 • Applicable declarations will be verified during product analysis.
+          </p>
+        </div>
 
+        <div className="nis-bottombar">
+          <button className="nis-back-link" onClick={onBack}>← Back</button>
+          <button className="nis-continue-btn" onClick={handleContinue}>
+            Continue to Product Scan →
+          </button>
+        </div>
 
-          {/* Actions */}
-          <div className="new-inspection-actions">
-
-            <button
-              className="new-inspection-back"
-              onClick={onBack}
-            >
-              ← BACK TO DASHBOARD
-            </button>
-
-
-            <button
-              className="new-inspection-continue"
-              onClick={handleContinue}
-            >
-              CONTINUE TO PRODUCT IMAGES
-
-              <span>
-                →
-              </span>
-
-            </button>
-
-          </div>
-
-        </section>
-
-      </main>
-
-
-      {/* Footer */}
-      <footer className="new-inspection-footer">
-
-        <span>
-          DEPARTMENT OF CONSUMER AFFAIRS
-        </span>
-
-        <span>
-          LEGAL METROLOGY · INSPECTION WORKSPACE
-        </span>
-
-        <span>
-          NIRIKSHAN · v1.0
-        </span>
-
-      </footer>
-
+      </div>
     </div>
   );
 }

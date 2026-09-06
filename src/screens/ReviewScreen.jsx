@@ -1,512 +1,382 @@
+// TEST-MARKER-12345
 import { useState } from "react";
-import "./ReportScreen.css";
-import { generateReportPdf } from "../utils/generateReportPdf";
-import { db } from "../firebaseConfig";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import "./ReviewScreen.css";
 
-function computeOverallStatus(confirmedFindings, isExemptCase) {
-  if (isExemptCase) {
-    return { label: "EXEMPT — NO DECLARATIONS REQUIRED", color: "#7a6c90" };
-  }
-  if (confirmedFindings.length === 0) {
-    return { label: "COMPLIANT", color: "#2fa66b" };
-  }
-  const hasCritical = confirmedFindings.some((f) => f.severity === "critical");
-  if (hasCritical) {
-    return { label: "NON-COMPLIANT", color: "#e14b3a" };
-  }
-  return { label: "FLAGGED FOR REVIEW", color: "#e14b3a" };
-}
+const BASE_FIELD_CONFIG = [
+  {
+    key: "manufacturer",
+    label: "MANUFACTURER / PACKER / IMPORTER",
+    displayLabel: "Manufacturer / Packer / Importer",
+    ruleCode: "Rule 6(1)(a)",
+    requirement: "Name and address of manufacturer, packer or importer",
+    enterLabel: "Enter Manufacturer",
+  },
+  {
+    key: "genericName",
+    label: "COMMON / GENERIC NAME",
+    displayLabel: "Common / Generic Name",
+    ruleCode: "Rule 6(1)(b)",
+    requirement: "Common or generic name of the commodity",
+    enterLabel: "Enter Name",
+  },
+  {
+    key: "netQuantity",
+    label: "NET QUANTITY",
+    displayLabel: "Net Quantity",
+    ruleCode: "Rule 6(1)(c)",
+    requirement: "Net quantity in standard units of weight, volume or number",
+    enterLabel: "Enter Quantity",
+  },
+  {
+    key: "mfgDate",
+    label: "MONTH & YEAR OF MFG/PACKING",
+    displayLabel: "Month & Year of Mfg/Packing",
+    ruleCode: "Rule 6(1)(e)",
+    requirement: "Month and year in which the commodity was manufactured or packed",
+    enterLabel: "Enter Date",
+  },
+  {
+    key: "mrp",
+    label: "RETAIL SALE PRICE (MRP)",
+    displayLabel: "Retail Sale Price (MRP)",
+    ruleCode: "Rule 6(1)(d)",
+    requirement: "MRP inclusive of all taxes",
+    enterLabel: "Enter MRP",
+  },
+  {
+    key: "consumerCare",
+    label: "CONSUMER CARE DETAILS",
+    displayLabel: "Consumer Care Details",
+    ruleCode: "Rule 6(1)(g)",
+    requirement: "Name, address, telephone/e-mail for consumer complaints",
+    enterLabel: "Enter Contact",
+  },
+];
+
+const COUNTRY_OF_ORIGIN_FIELD = {
+  key: "countryOfOrigin",
+  label: "COUNTRY OF ORIGIN",
+  displayLabel: "Country of Origin",
+  ruleCode: "Rule 6(1)(f)",
+  requirement: "Required only for imported products, as per Rule 6(1)",
+  enterLabel: "Enter Origin",
+};
 
 function formatDateTime(ms) {
-  if (!ms) return null;
+  if (!ms) return "";
   const d = new Date(ms);
-  return {
-    date: d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" }),
-    time: d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true }),
-  };
+  const date = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  return `${date}, ${time}`;
 }
 
-function ReportScreen({
-  images,
-  productInfo,
-  declarationRows,
-  findings,
-  officerName,
-  ocrCompletedAt,
-  findingsReviewedAt,
-  onBack,
-  onDashboard,
-}) {
-  const [reportPreparedAt] = useState(() => Date.now());
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [isFinalizing, setIsFinalizing] = useState(false);
-  const [isFinalized, setIsFinalized] = useState(false);
+function ReviewScreen({ analysis, productInfo, officerName, onBack, onContinue, onSaveDraft }) {
+  const declarations = analysis?.declarations || {};
+  const isImported = productInfo?.isImported;
 
-  const rows = declarationRows || [];
-  const allFindings = findings || [];
-  const product = productInfo || {};
-  const isExemptCase = Boolean(product.isExempt);
+  const [treatAsExempt, setTreatAsExempt] = useState(Boolean(productInfo?.isExempt));
 
-  const totalFields = rows.length;
+  const fieldConfig = isImported
+    ? [...BASE_FIELD_CONFIG, COUNTRY_OF_ORIGIN_FIELD]
+    : BASE_FIELD_CONFIG;
+
+  const initialRows = fieldConfig.map((field) => {
+    const data = declarations[field.key] || { found: false, value: null, rule: "" };
+    return {
+      ...field,
+      ...data,
+      originalValue: data.value,
+      originalFound: data.found,
+    };
+  });
+
+  const [rows, setRows] = useState(initialRows);
+  const [editingKey, setEditingKey] = useState(null);
+  const [editValue, setEditValue] = useState("");
+  const [editReason, setEditReason] = useState("");
+
   const validCount = rows.filter((r) => r.found).length;
-  const reviewCount = totalFields - validCount;
-  const score = totalFields ? Math.round((validCount / totalFields) * 100) : 0;
+  const reviewCount = rows.length - validCount;
+  const warningCount = rows.filter((r) => r.found && r.warning).length;
 
-  const confirmedFindings = allFindings.filter((f) => f.status === "confirmed");
-  const overallStatus = computeOverallStatus(confirmedFindings, isExemptCase);
-
-  const editedRows = rows.filter((r) => r.manuallyEdited);
-
-  const netQtyRow = rows.find((r) => r.key === "netQuantity");
-  const previewUrl =
-    images?.label?.previewUrl ||
-    images?.front?.previewUrl ||
-    images?.mrp?.previewUrl ||
-    images?.back?.previewUrl;
-
-  const reportDate = product.inspectionDate
-    ? new Date(product.inspectionDate).toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      })
-    : new Date().toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      });
-
-  const now = new Date();
-  const inspectionId = `INSP-26034-${String(now.getTime()).slice(-6)}`;
-
-  const ocrTime = formatDateTime(ocrCompletedAt);
-  const reviewTime = formatDateTime(findingsReviewedAt);
-  const preparedTime = formatDateTime(reportPreparedAt);
-
-  const initials = (product.productName || "PR")
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
-  const handleDownloadPdf = async () => {
-    setIsDownloading(true);
-    try {
-      await generateReportPdf({
-        productInfo: product,
-        declarationRows: rows,
-        findings: allFindings,
-        previewUrl,
-        inspectionId,
-        reportDate,
-        score,
-        validCount,
-        totalFields,
-        overallStatusLabel: overallStatus.label,
-        officerName,
-      });
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-      alert("Could not generate PDF. Please try again.");
-    } finally {
-      setIsDownloading(false);
-    }
+  const startEdit = (row) => {
+    setEditingKey(row.key);
+    setEditValue(row.value || "");
+    setEditReason("");
   };
 
-  const handleFinalizeReport = async () => {
-    const confirmed = window.confirm(
-      "Finalizing will save this report permanently. Continue?"
+  const cancelEdit = () => {
+    setEditingKey(null);
+    setEditValue("");
+    setEditReason("");
+  };
+
+  const saveEdit = (key) => {
+    if (!editReason.trim()) {
+      alert("Please provide a reason for this correction before saving.");
+      return;
+    }
+
+    setRows((prev) =>
+      prev.map((r) =>
+        r.key === key
+          ? {
+              ...r,
+              value: editValue.trim() || null,
+              found: Boolean(editValue.trim()),
+              warning: null,
+              confidence: "manual",
+              manuallyEdited: true,
+              editReason: editReason.trim(),
+              editedBy: officerName || "Unnamed Officer",
+              editedAt: Date.now(),
+            }
+          : r
+      )
     );
-    if (!confirmed) return;
-
-    setIsFinalizing(true);
-    try {
-      await addDoc(collection(db, "inspections"), {
-        inspectionId,
-        productName: product.productName || "Unnamed Product",
-        manufacturer: product.manufacturer || "Not specified",
-        category: product.category || "Not specified",
-        inspectionType: product.inspectionType || "Not specified",
-        isImported: Boolean(product.isImported),
-        isExempt: isExemptCase,
-        overallStatus: overallStatus.label,
-        score: isExemptCase ? null : score,
-        validCount: isExemptCase ? null : validCount,
-        totalFields: isExemptCase ? null : totalFields,
-        declarationRows: rows,
-        confirmedFindings: confirmedFindings,
-        reportDate,
-        officerName: officerName || "Unnamed Officer",
-        ocrCompletedAt: ocrCompletedAt || null,
-        findingsReviewedAt: findingsReviewedAt || null,
-        reportPreparedAt,
-        createdAt: Timestamp.now(),
-      });
-
-      setIsFinalized(true);
-      alert("Report finalized and saved successfully.");
-    } catch (err) {
-      console.error("Failed to save report:", err);
-      alert("Could not save the report. Please check your connection and try again.");
-    } finally {
-      setIsFinalizing(false);
-    }
+    setEditingKey(null);
+    setEditValue("");
+    setEditReason("");
   };
+
+  const handleSaveDraft = () => {
+    if (onSaveDraft) onSaveDraft(rows);
+  };
+
+  const exemptToggle = (
+    <label className="exempt-card" htmlFor="exempt-override">
+      <input
+        type="checkbox"
+        id="exempt-override"
+        checked={treatAsExempt}
+        onChange={(e) => setTreatAsExempt(e.target.checked)}
+      />
+      <span>
+        Treat this product as an exempt category (Rule 3 / 26) — no declaration checks required
+      </span>
+    </label>
+  );
+
+  if (treatAsExempt) {
+    return (
+      <div className="review-page">
+        <header className="review-header">
+          <button className="review-back-link" onClick={onBack}>
+            <span className="back-arrow">←</span> Back to Analysis
+          </button>
+          <div className="review-step">STEP 04 / 05 · REVIEW DECLARATIONS</div>
+        </header>
+
+        <main className="review-main">
+          <div className="review-eyebrow">STEP 04 · MANDATORY DECLARATIONS</div>
+          <h1 className="review-title">Exempt category</h1>
+          <p className="review-subtitle">
+            This product has been marked as exempt from mandatory declarations under Rule 3 /
+            Rule 26 of the Legal Metrology (Packaged Commodities) Rules, 2011 (e.g. package under
+            10g/10ml, institutional pack, or agricultural produce above 50kg).
+          </p>
+
+          {exemptToggle}
+
+          <p className="review-note">
+            <span className="note-icon">ⓘ</span>
+            No mandatory declarations apply — Rule 6 checks have been skipped. Untick the box
+            above if this was marked in error.
+          </p>
+
+          <div className="review-bottom-bar">
+            <button className="btn-text-link" onClick={onBack}>
+              ← Back to Analysis
+            </button>
+            <div className="review-bottom-actions">
+              <button className="btn-outline" onClick={handleSaveDraft}>
+                Save Draft
+              </button>
+              <button className="btn-primary-dark" onClick={() => onContinue([])}>
+                Complete Compliance Check <span>→</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <div className="report-screen">
-      <header className="report-header">
-        <div className="brand-block">
-          <div className="brand-name">NIRIKSHAN</div>
-          <div className="brand-subtitle">LEGAL METROLOGY</div>
-        </div>
-
-        <div className="report-step">
-          <span>INSPECTION REPORT</span>
-          <strong>06 / 06</strong>
-        </div>
+    <div className="review-page">
+      <header className="review-header">
+        <button className="review-back-link" onClick={onBack}>
+          <span className="back-arrow">←</span> Back to Analysis
+        </button>
+        <div className="review-step">STEP 04 / 05 · REVIEW DECLARATIONS</div>
       </header>
 
-      <main className="report-content">
-        <section className="report-intro">
-          <div>
-            <p className="report-eyebrow">COMPLIANCE RECORD</p>
-            <h1>Inspection report</h1>
-            <p className="report-description">
-              Review the completed inspection record, compliance findings and
-              corrective action before finalizing the report.
-            </p>
-          </div>
+      <main className="review-main">
+        <div className="review-eyebrow">STEP 04 · MANDATORY DECLARATIONS</div>
+        <h1 className="review-title">Review extracted details</h1>
+        <p className="review-subtitle">
+          Verify mandatory product label declarations against Rule 6 of the Legal Metrology
+          (Packaged Commodities) Rules, 2011.
+          {isImported ? " Country of Origin is checked as this product is marked imported." : ""}
+        </p>
 
-          <div className="report-status" style={{ borderColor: overallStatus.color, color: overallStatus.color }}>
-            <span className="status-dot" style={{ background: overallStatus.color }}></span>
-            {overallStatus.label}
-          </div>
-        </section>
+        {exemptToggle}
 
-        <section className="report-grid">
-          <div className="report-card summary-card">
-            <div className="card-heading">
-              <span>01</span>
-              <h2>INSPECTION SUMMARY</h2>
-            </div>
-
-            <div className="summary-product">
-              {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt={product.productName || "Inspected product"}
-                  className="product-mark"
-                  style={{ objectFit: "cover" }}
-                />
-              ) : (
-                <div className="product-mark">{initials}</div>
+        <section className="declaration-card">
+          <div className="declaration-card-header">
+            <span className="declaration-card-title">EXTRACTED DECLARATIONS</span>
+            <div className="declaration-chips">
+              <span className="chip chip-valid">
+                <i className="chip-dot" />
+                {validCount} Valid
+              </span>
+              {reviewCount > 0 && (
+                <span className="chip chip-review">
+                  <i className="chip-dot" />
+                  {reviewCount} Needs Review
+                </span>
               )}
-              <div>
-                <h3>{product.productName || "Unnamed Product"}</h3>
-                <p>
-                  {product.category || "Packaged Commodity"}
-                  {product.manufacturer ? ` · ${product.manufacturer}` : ""}
-                </p>
-              </div>
-            </div>
-
-            <div className="details-grid">
-              <div>
-                <span>INSPECTION ID</span>
-                <strong>{inspectionId}</strong>
-              </div>
-
-              <div>
-                <span>INSPECTING OFFICER</span>
-                <strong>{officerName || "Unnamed Officer"}</strong>
-              </div>
-
-              <div>
-                <span>INSPECTION DATE</span>
-                <strong>{reportDate}</strong>
-              </div>
-
-              <div>
-                <span>NET QUANTITY</span>
-                <strong>{netQtyRow?.value || "Not detected"}</strong>
-              </div>
-
-              <div>
-                <span>DECLARATIONS CHECKED</span>
-                <strong>{isExemptCase ? "N/A" : String(totalFields).padStart(2, "0")}</strong>
-              </div>
             </div>
           </div>
 
-          <div className="report-card score-card">
-            <div className="card-heading">
-              <span>02</span>
-              <h2>COMPLIANCE SCORE</h2>
-            </div>
-
-            {isExemptCase ? (
-              <>
-                <div className="score-display">
-                  <strong style={{ fontSize: 32 }}>N/A</strong>
-                  <span>Exempt category — no declarations required</span>
-                </div>
-
-                <div className="score-bar">
-                  <div className="score-fill" style={{ width: "100%", background: "#7a6c90" }}></div>
-                </div>
-
-                <div className="score-meta">
-                  <span style={{ color: "#7a6c90" }}>EXEMPT UNDER RULE 3 / 26</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="score-display">
-                  <strong>{score}%</strong>
-                  <span>{validCount} of {totalFields} declarations clear</span>
-                </div>
-
-                <div className="score-bar">
-                  <div
-                    className="score-fill"
-                    style={{
-                      width: `${score}%`,
-                      background: score >= 80 ? "#2fa66b" : score >= 50 ? "#e8c24a" : "#e14b3a",
-                    }}
-                  ></div>
-                </div>
-
-                <div className="score-meta">
-                  <span className="valid-text">{String(validCount).padStart(2, "0")} VALID</span>
-                  <span className="review-text">{String(reviewCount).padStart(2, "0")} REVIEW</span>
-                </div>
-              </>
-            )}
+          <div className="declaration-columns-header">
+            <span>FIELD</span>
+            <span>EXTRACTED VALUE</span>
+            <span>RULE</span>
+            <span>STATUS</span>
+            <span>ACTION</span>
           </div>
-        </section>
 
-        {editedRows.length > 0 && (
-          <section className="report-card findings-card">
-            <div className="card-heading">
-              <span>—</span>
-              <h2>MANUAL CORRECTIONS LOG</h2>
-            </div>
+          {rows.map((row) => {
+            const displayRule = row.rule || row.ruleCode;
+            return (
+              <div
+                className={`declaration-row ${!row.found ? "needs-review-row" : ""}`}
+                key={row.key}
+              >
+                <div className="cell cell-field" data-label="Field">
+                  {row.displayLabel || row.label}
+                </div>
 
-            {editedRows.map((row) => {
-              const t = formatDateTime(row.editedAt);
-              return (
-                <div className="finding-row" key={row.key}>
-                  <div className="finding-number">!</div>
-                  <div className="finding-main">
-                    <div className="finding-title-row">
-                      <h3>{row.label}</h3>
-                    </div>
-                    <p>
-                      AI detected: <strong>{row.originalFound ? row.originalValue : "Not detected"}</strong>
-                      {" → "}
-                      Corrected to: <strong>{row.value}</strong>
-                    </p>
-                    <div className="finding-details">
-                      <div>
-                        <span>CORRECTED BY</span>
-                        <strong>{row.editedBy}</strong>
+                <div className="cell cell-value" data-label="Extracted value">
+                  {editingKey === row.key ? (
+                    <div className="edit-area">
+                      <input
+                        type="text"
+                        className="edit-input"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        placeholder="Corrected value"
+                        autoFocus
+                      />
+                      <input
+                        type="text"
+                        className="edit-input edit-input-reason"
+                        value={editReason}
+                        onChange={(e) => setEditReason(e.target.value)}
+                        placeholder="Reason for correction (required)"
+                      />
+                      <div className="edit-meta">
+                        Will be recorded as corrected by:{" "}
+                        <span>{officerName || "Unnamed Officer"}</span>
                       </div>
-                      <div>
-                        <span>DATE &amp; TIME</span>
-                        <strong>{t ? `${t.date}, ${t.time}` : "Not recorded"}</strong>
+                      <div className="edit-actions">
+                        <button className="edit-save" onClick={() => saveEdit(row.key)}>
+                          Save
+                        </button>
+                        <button className="edit-cancel" onClick={cancelEdit}>
+                          Cancel
+                        </button>
                       </div>
                     </div>
-                    <p style={{ marginTop: "8px" }}>
-                      <span style={{ color: "#7a6c90" }}>Reason: </span>
-                      {row.editReason}
-                    </p>
-                  </div>
+                  ) : (
+                    <div>
+                      {row.found ? (
+                        <span className="value-text">{row.value}</span>
+                      ) : (
+                        <span className="value-missing">Not detected on label</span>
+                      )}
+
+                      {row.warning && (
+                        <span className="value-warning">⚠ {row.warning}</span>
+                      )}
+
+                      {row.manuallyEdited && (
+                        <div className="edit-history">
+                          <div>
+                            AI detected:{" "}
+                            <span>{row.originalFound ? row.originalValue : "Not detected"}</span>
+                          </div>
+                          <div>
+                            Corrected by: <span className="edit-history-officer">{row.editedBy}</span>
+                            {" · "}
+                            {formatDateTime(row.editedAt)}
+                          </div>
+                          <div>
+                            Reason: <span>{row.editReason}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              );
-            })}
-          </section>
-        )}
 
-        <section className="report-card findings-card">
-          <div className="card-heading">
-            <span>03</span>
-            <h2>COMPLIANCE FINDINGS</h2>
-          </div>
+                <div className="cell cell-rule" data-label="Rule">
+                  {displayRule}
+                </div>
 
-          {isExemptCase ? (
-            <div className="finding-row">
-              <div className="finding-number">—</div>
-              <div className="finding-main">
-                <p>
-                  This product is exempt from mandatory Rule 6 declarations
-                  under Rule 3 / Rule 26 of the Legal Metrology (Packaged
-                  Commodities) Rules, 2011. No compliance findings apply.
-                </p>
-              </div>
-            </div>
-          ) : confirmedFindings.length === 0 ? (
-            <div className="finding-row">
-              <div className="finding-number">—</div>
-              <div className="finding-main">
-                <p>No findings were confirmed by the inspector for this inspection.</p>
-              </div>
-            </div>
-          ) : (
-            confirmedFindings.map((finding, idx) => (
-              <div className="finding-row" key={finding.id}>
-                <div className="finding-number">{String(idx + 1).padStart(2, "0")}</div>
+                <div className="cell cell-status" data-label="Status">
+                  {row.found ? (
+                    <span className="status-pill pill-valid">✓ Valid</span>
+                  ) : (
+                    <span className="status-pill pill-review">⚠ Needs Review</span>
+                  )}
+                </div>
 
-                <div className="finding-main">
-                  <div className="finding-title-row">
-                    <h3>{finding.title}</h3>
-                    <span
-                      className="review-badge"
-                      style={{
-                        borderColor: finding.severity === "critical" ? "#e14b3a" : "#e8c24a",
-                        color: finding.severity === "critical" ? "#e14b3a" : "#e8c24a",
-                      }}
-                    >
-                      {finding.severity === "critical" ? "VIOLATION" : "REVIEW"}
-                    </span>
-                  </div>
-
-                  <p>{finding.evidenceText}</p>
-
-                  <div className="finding-details">
-                    <div>
-                      <span>DETECTED INFORMATION</span>
-                      <strong>{finding.evidenceStatus}</strong>
-                    </div>
-
-                    <div>
-                      <span>REQUIREMENT</span>
-                      <strong>{finding.requirementText}</strong>
-                    </div>
-                  </div>
+                <div className="cell cell-action" data-label="Action">
+                  {editingKey === row.key ? null : row.found ? (
+                    <button className="action-edit-link" onClick={() => startEdit(row)}>
+                      Edit
+                    </button>
+                  ) : (
+                    <button className="action-enter-btn" onClick={() => startEdit(row)}>
+                      {row.enterLabel || "Enter Value"}
+                    </button>
+                  )}
                 </div>
               </div>
-            ))
-          )}
+            );
+          })}
         </section>
 
-        <section className="report-grid lower-grid">
-          <div className="report-card action-card">
-            <div className="card-heading">
-              <span>04</span>
-              <h2>CORRECTIVE ACTION</h2>
-            </div>
+        <p className="review-note">
+          <span className="note-icon">ⓘ</span>
+          {reviewCount > 0
+            ? `${reviewCount} declaration${reviewCount > 1 ? "s" : ""} require${
+                reviewCount === 1 ? "s" : ""
+              } manual verification. Any override will be recorded in the official audit trail.`
+            : "All mandatory declarations were detected successfully."}
+          {warningCount > 0
+            ? ` ${warningCount} declaration${warningCount > 1 ? "s" : ""} carry a formatting warning — review before confirming.`
+            : ""}
+        </p>
 
-            <div className="action-content">
-              <div className="action-icon">!</div>
-
-              <div>
-                <h3>
-                  {isExemptCase
-                    ? "No action required"
-                    : confirmedFindings.length > 0
-                    ? "Manual verification required"
-                    : "No action required"}
-                </h3>
-                <p>
-                  {isExemptCase
-                    ? "This product falls under an exempt category and is not subject to Rule 6 mandatory declarations."
-                    : confirmedFindings.length > 0
-                    ? "Verify the flagged declarations on the physical package and record the final compliance decision."
-                    : "All checked declarations were found compliant. No corrective action is needed at this time."}
-                </p>
-              </div>
-            </div>
-
-            <div className="assignment">
-              <span>RESPONSIBLE OFFICER</span>
-              <strong>{officerName || "Compliance Review Officer"}</strong>
-            </div>
-          </div>
-
-          <div className="report-card audit-card">
-            <div className="card-heading">
-              <span>05</span>
-              <h2>AUDIT TRAIL</h2>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line"></div>
-              <div>
-                <strong>AI analysis completed (OCR)</strong>
-                <span>
-                  {ocrTime ? `${ocrTime.date} · ${ocrTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line"></div>
-              <div>
-                <strong>Findings reviewed by {officerName || "inspector"}</strong>
-                <span>
-                  {reviewTime ? `${reviewTime.date} · ${reviewTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-
-            <div className="audit-item">
-              <div className="audit-line last"></div>
-              <div>
-                <strong>Report prepared</strong>
-                <span>
-                  {preparedTime ? `${preparedTime.date} · ${preparedTime.time}` : "Not recorded"}
-                </span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section className="report-note">
-          <div className="note-label">AI ASSISTED RECORD</div>
-          <p>
-            This report is generated from image analysis, OCR extraction and
-            rule-based compliance verification. Final enforcement decisions
-            remain subject to authorized inspector review.
-          </p>
-        </section>
-
-        <div className="report-actions">
-          <button className="back-button" onClick={onBack}>
-            ← BACK TO FINDINGS
+        <div className="review-bottom-bar">
+          <button className="btn-text-link" onClick={onBack}>
+            ← Back to Analysis
           </button>
-
-          <div className="action-buttons">
-            <button
-              className="save-button"
-              onClick={handleDownloadPdf}
-              disabled={isDownloading}
-            >
-              {isDownloading ? "GENERATING..." : "DOWNLOAD PDF"}
+          <div className="review-bottom-actions">
+            <button className="btn-outline" onClick={handleSaveDraft}>
+              Save Draft
             </button>
-
-            <button
-              className="finalize-button"
-              onClick={handleFinalizeReport}
-              disabled={isFinalizing || isFinalized}
-            >
-              {isFinalized
-                ? "REPORT FINALIZED ✓"
-                : isFinalizing
-                ? "SAVING..."
-                : "FINALIZE REPORT →"}
+            <button className="btn-primary-dark" onClick={() => onContinue(rows)}>
+              Complete Compliance Check <span>→</span>
             </button>
           </div>
         </div>
-
-        <button className="dashboard-link" onClick={onDashboard}>
-          RETURN TO DASHBOARD
-        </button>
       </main>
     </div>
   );
 }
 
-export default ReportScreen;
+export default ReviewScreen;

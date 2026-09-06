@@ -7,7 +7,7 @@ const firebaseConfig = {
   projectId: "nirikshan-325c2",
   storageBucket: "nirikshan-325c2.firebasestorage.app",
   messagingSenderId: "48463970094",
-  appId: "1:48463970094:web:14e9e730f17b90afeec4bf",
+  appId: "1:48463970094:web:14e9e730f17b90afeec4bf"
 };
 
 const app = initializeApp(firebaseConfig);
